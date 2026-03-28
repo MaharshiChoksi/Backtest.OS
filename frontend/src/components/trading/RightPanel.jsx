@@ -1,0 +1,144 @@
+import { useState, useMemo } from 'react'
+import { useTheme }          from '../../store/useThemeStore'
+import { useSimStore }       from '../../store/useSimStore'
+import { useTradeStore }     from '../../store/useTradeStore'
+import { FONT }              from '../../constants'
+import { fmtPnl, fmtDate, fmt, guessDecimals } from '../../utils/format'
+import { TabBar, SectionHeader, pill }           from '../ui/atoms'
+import { TradeForm }           from './TradeForm'
+import { OpenPositionCard }    from './OpenPositionCard'
+import { JournalTab }          from './JournalTab'
+
+export function RightPanel() {
+  const C     = useTheme()
+  const [tab, setTab] = useState('trades')
+
+  return (
+    <div style={{ width: 310, background: C.surf, borderLeft: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
+      <TabBar tabs={['trades', 'journal', 'history']} active={tab} onChange={setTab} />
+      {tab === 'trades'  && <TradesTab  />}
+      {tab === 'journal' && <JournalTab />}
+      {tab === 'history' && <HistoryTab />}
+    </div>
+  )
+}
+
+// ── TRADES tab ────────────────────────────────────────────────
+function TradesTab() {
+  const C          = useTheme()
+  const bars       = useSimStore((s) => s.bars)
+  const cursor     = useSimStore((s) => s.cursor)
+  const trades     = useTradeStore((s) => s.trades)
+
+  const currentBar  = bars[cursor - 1]
+  const openTrades  = useMemo(() => trades.filter((t) => t.status === 'open'), [trades])
+
+  const floatingPnl = useMemo(() =>
+    openTrades.reduce((s, t) => {
+      if (!currentBar) return s
+      return s + (t.side === 'buy'
+        ? (currentBar.close - t.entry) * t.size
+        : (t.entry - currentBar.close) * t.size)
+    }, 0), [openTrades, currentBar])
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <TradeForm />
+
+      {/* Open positions list */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {openTrades.length > 0 ? (
+          <>
+            <div style={{ padding: '8px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: C.muted, fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase' }}>
+                Open ({openTrades.length})
+              </span>
+              <span style={{ color: floatingPnl >= 0 ? C.green : C.red, fontSize: 10 }}>
+                {fmtPnl(floatingPnl)}
+              </span>
+            </div>
+            {openTrades.map((t) => <OpenPositionCard key={t.id} trade={t} />)}
+          </>
+        ) : (
+          <div style={{ padding: 24, textAlign: 'center', color: C.dim, fontSize: 11, lineHeight: 1.8 }}>
+            No open positions.<br />Press Play and open a trade.
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── HISTORY tab ───────────────────────────────────────────────
+function HistoryTab() {
+  const C          = useTheme()
+  const trades     = useTradeStore((s) => s.trades)
+  const closedTrades = useMemo(() => trades.filter((t) => t.status === 'closed'), [trades])
+  const totalPnl   = useMemo(() => closedTrades.reduce((s, t) => s + (t.pnl || 0), 0), [closedTrades])
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto' }}>
+      <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ color: C.muted, fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase' }}>
+          Closed ({closedTrades.length})
+        </span>
+        <span style={{ color: totalPnl >= 0 ? C.green : C.red, fontSize: 11, fontWeight: 700 }}>
+          {fmtPnl(totalPnl)}
+        </span>
+      </div>
+
+      {closedTrades.length === 0 && (
+        <div style={{ padding: 24, textAlign: 'center', color: C.dim, fontSize: 11 }}>
+          No closed trades yet.
+        </div>
+      )}
+
+      {[...closedTrades].reverse().map((t) => (
+        <ClosedTradeRow key={t.id} trade={t} />
+      ))}
+    </div>
+  )
+}
+
+// ── Single closed trade row ────────────────────────────────────
+function ClosedTradeRow({ trade: t }) {
+  const C   = useTheme()
+  const dec = guessDecimals(t.entry)
+
+  const reasonColor = t.closeReason === 'SL'
+    ? C.red
+    : t.closeReason === 'TP'
+    ? C.green
+    : C.muted
+
+  return (
+    <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}18` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
+          <span style={{ color: t.side === 'buy' ? C.green : C.red, fontSize: 10, fontWeight: 700 }}>
+            {t.side === 'buy' ? '▲' : '▼'} #{t.id}
+          </span>
+          <span style={{ color: C.muted, fontSize: 9 }}>×{t.size}</span>
+        </div>
+        <span style={{ color: t.pnl >= 0 ? C.green : C.red, fontSize: 12, fontWeight: 700 }}>
+          {fmtPnl(t.pnl)}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: C.muted, marginBottom: 3 }}>
+        <span>{fmt(t.entry, dec)} → {fmt(t.closePrice, dec)}</span>
+        <span style={pill(reasonColor)}>{t.closeReason}</span>
+      </div>
+
+      <div style={{ fontSize: 9, color: C.dim }}>
+        {fmtDate(t.openTime)} → {fmtDate(t.closeTime)}
+      </div>
+
+      {t.comment && (
+        <div style={{ fontSize: 10, color: C.muted, marginTop: 4, fontStyle: 'italic' }}>
+          {t.comment}
+        </div>
+      )}
+    </div>
+  )
+}
