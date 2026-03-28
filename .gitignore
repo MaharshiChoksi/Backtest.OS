@@ -1,0 +1,10 @@
+__pycache__/
+.env
+.vscode/
+template.txt
+node_modules/
+dist/
+build/
+*.log
+*.pyc
+*.mhtml
