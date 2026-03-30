@@ -259,18 +259,20 @@ export function UploadScreen() {
       
       selectedTimeframes.forEach(tf => {
         const tfMs = getTimeframeMs(tf)
-        console.log('Processing timeframe:', tf, 'ms:', tfMs, 'vs detected:', detectedMs)
+        const displayKey = tfDisplayMap[tf] || tf  // Use display format as key (M1, M5, etc)
+        console.log('Processing timeframe:', tf, 'display:', displayKey, 'ms:', tfMs, 'vs detected:', detectedMs)
         
         if (tfMs >= detectedMs) {
           if (tfMs === detectedMs) {
-            barsMap[tf] = filteredBars
+            barsMap[displayKey] = filteredBars
           } else {
-            barsMap[tf] = aggregateBars(filteredBars, detectedMs, tfMs)
+            barsMap[displayKey] = aggregateBars(filteredBars, detectedMs, tfMs)
           }
         } else {
-          barsMap[tf] = filteredBars
+          // Can't downsample - just use original (user should load higher resolution data)
+          barsMap[displayKey] = filteredBars
         }
-        console.log('  →', tf, 'bars:', barsMap[tf].length)
+        console.log('  →', displayKey, 'bars:', barsMap[displayKey].length)
       })
 
       console.log('📦 Final barsMap:', Object.keys(barsMap).map(k => `${k}:${barsMap[k].length}`).join(', '))
@@ -281,8 +283,8 @@ export function UploadScreen() {
       }
 
       setStatus('🚀 Loading session...')
-      setTimeframe(selectedTimeframes[0])
-      useSimStore.getState().loadMultiTimeframeSession(barsMap, selectedTimeframes, fileName)
+      setTimeframe(tfDisplayMap[selectedTimeframes[0]] || selectedTimeframes[0])  // Set with display format
+      useSimStore.getState().loadMultiTimeframeSession(barsMap, selectedTimeframes.map(tf => tfDisplayMap[tf] || tf), fileName)
       
       console.log('✅ Backtest started successfully!')
       setStatus('')
