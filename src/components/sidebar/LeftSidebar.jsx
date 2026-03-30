@@ -3,7 +3,7 @@ import { useTheme }          from '../../store/useThemeStore'
 import { useSimStore }       from '../../store/useSimStore'
 import { useTradeStore }     from '../../store/useTradeStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
-import { getDecimalPlaces } from '../../utils/tradingUtils'
+import { getDecimalPlaces, getExitPrice } from '../../utils/tradingUtils'
 import { FONT }              from '../../constants'
 import { fmt, fmtPnl, fmtShortDate } from '../../utils/format'
 import { TabBar, Kv, SectionHeader, Divider, pill }  from '../ui/atoms'
@@ -45,11 +45,13 @@ function InfoTab() {
       if (!currentBar || !symbolConfig) return s
       const pip_size = symbolConfig.pip_size || 0.0001
       const pip_value = symbolConfig.pip_value || 10
-      const priceDiff = currentBar.close - t.entry
+      const spreadInPips = accountConfig ? (accountConfig.spread || 0) : 0
+      const exitPrice = getExitPrice(currentBar.close, t.side, spreadInPips, pip_size)
+      const priceDiff = exitPrice - t.entry
       const pips = (priceDiff / pip_size) * (t.side === 'sell' ? -1 : 1)
       const pnl = pips * pip_value * t.size
       return s + pnl
-    }, 0), [openTrades, currentBar, symbolConfig])
+    }, 0), [openTrades, currentBar, symbolConfig, accountConfig])
 
   const wins    = closedTrades.filter((t) => t.pnl > 0)
   const losses  = closedTrades.filter((t) => t.pnl <= 0)

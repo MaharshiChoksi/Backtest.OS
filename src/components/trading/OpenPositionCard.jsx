@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useTheme }      from '../../store/useThemeStore'
 import { useSimStore }   from '../../store/useSimStore'
 import { useTradeStore } from '../../store/useTradeStore'
-import { getDecimalPlaces } from '../../utils/tradingUtils'
+import { getDecimalPlaces, getExitPrice } from '../../utils/tradingUtils'
 import { FONT }          from '../../constants'
 import { fmt, fmtPnl, fmtDate } from '../../utils/format'
 import { mkInp, mkLabel } from '../ui/atoms'
@@ -52,8 +52,12 @@ export function OpenPositionCard({ trade: t }) {
   }
 
   const handleClose = () => {
-    if (!currentBar) return
-    closeTrade(t.id, currentBar.close, currentBar.time, 'Manual', symbolConfig, accountConfig)
+    if (!currentBar || !symbolConfig || !accountConfig) return
+    // Apply spread adjustment for exit: long receives bid (close - spread), short pays ask (close + spread)
+    const spreadInPips = accountConfig.spread || 0
+    const pipSize = symbolConfig.pip_size || 0.0001
+    const exitPrice = getExitPrice(currentBar.close, t.side, spreadInPips, pipSize)
+    closeTrade(t.id, exitPrice, currentBar.time, 'Manual', symbolConfig, accountConfig)
   }
 
   const accent = t.side === 'buy' ? C.green : C.red
