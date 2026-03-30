@@ -163,7 +163,7 @@ date,time,open,high,low,close,volume
 ```
 
 ### Fair Warning on Large Datasets
-I Recommend loading upto 1.25 million bars per chart.. It'll work, but don't go crazy—your browser still has limits.
+I Recommend loading upto 1 million bars per chart.. It'll work, but don't go crazy—your browser still has limits.
 
 ---
 
@@ -217,16 +217,14 @@ But honestly, the current version does what most traders need right now.
 
 ## Performance
 
-The app is built to be fast. The simulation engine runs every 16 milliseconds, which means you can replay data at 50x speed smoothly without the UI locking up. We're using some tricks like ref-based updates and lazy calculations to keep things snappy even with massive datasets.
-
-If you're running typical trading data (a few hundred thousand bars), you won't notice any lag. Even at 1.25 million bars per chart, it stays responsive.
+The app is built to be fast. The simulation engine runs every 16 milliseconds, which means you can replay data at 50x speed smoothly without the UI locking up. We're using some tricks like ref-based updates and lazy calculations to keep things snappy even with massive datasets. And thanks to the tradngview's lightweight chart library for chart engine.
 
 ---
 
 ## 🐛 Known Limitations
 
 - Can't display more than 3 charts at once (the rendering would get too heavy)
-- 1.25 million bars (1M bars Recommended ~ Approx 2 years data @ 1Min TF)
+- 1 million bars (1M bars Recommended ~ Approx 1.5 years data @ 1Min TF)
 - Right now you're working with one symbol at a time
 - You have to pick all your timeframes upfront—you can't add a new one mid-backtest
 
@@ -260,13 +258,12 @@ Everything stays on your machine. Your data never leaves your browser. We cache 
 ---
 
 ## Future Ideas
-- Let traders customize which indicators they see with specific parameters
-- Add more built-in indicators beyond the current EMA-20, EMA-50, and RSI
-- Support backtesting across multiple symbols at once
-- Create better performance reporting and analytics dashboards
-- 
+- Let traders customize which indicators they want to apply with specific parameters
+- Will Add more built-in indicators like Session Box, Swing High low.
+- Create better performance reporting and analytics dashboards.
+- May add Economic data indicator for the selected period.
 
-Right now though, the foundation is solid and does everything a trader needs for manual backtesting.
+Right now though, the foundation is solid and does everything a trader needs for standard backtesting.
 
 ---
 
@@ -280,9 +277,7 @@ Found a bug? Want to add a feature? Great! Here's what helps:
 
 ---
 
-**Built by traders, for traders.** Happy testing!
-
----
+## Authors & Acknowledgements
 
 **Project Lead**: [@maharshichoksi](https://github.com/MaharshiChokski)
 
