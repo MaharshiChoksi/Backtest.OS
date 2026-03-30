@@ -747,24 +747,6 @@ export function UploadScreen() {
 
             <div style={{ display: 'flex', gap: 12 }}>
               <button
-                onClick={() => {
-                  setStep(STEPS.MAPPING)
-                  setError('')
-                }}
-                style={{
-                  background: 'transparent',
-                  border: `1px solid ${C.border2}`,
-                  color: C.text,
-                  padding: '10px 24px',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontFamily: FONT,
-                }}
-              >
-                ← Back
-              </button>
-              <button
                 onClick={handleConfirmSymbol}
                 disabled={!symbolConfig || processing}
                 style={{
@@ -976,21 +958,6 @@ export function UploadScreen() {
             )}
 
             <div style={{ display: 'flex', gap: 12 }}>
-              <button
-                onClick={() => setStep(STEPS.SYMBOL)}
-                style={{
-                  background: 'transparent',
-                  border: `1px solid ${C.border2}`,
-                  color: C.text,
-                  padding: '11px 28px',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontFamily: FONT,
-                }}
-              >
-                ← Back
-              </button>
               <button
                 onClick={handleStartBacktest}
                 disabled={processing}
