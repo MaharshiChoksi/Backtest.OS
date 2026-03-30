@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react'
 import { useTheme }      from '../../store/useThemeStore'
 import { useSimStore }   from '../../store/useSimStore'
 import { useTradeStore } from '../../store/useTradeStore'
+import { getDecimalPlaces } from '../../utils/tradingUtils'
 import { FONT }          from '../../constants'
-import { fmt, fmtPnl, fmtDate, guessDecimals } from '../../utils/format'
+import { fmt, fmtPnl, fmtDate } from '../../utils/format'
 import { mkInp, mkLabel } from '../ui/atoms'
 import { calculatePnL } from '../../utils/tradingUtils'
 /**
@@ -21,7 +22,11 @@ export function OpenPositionCard({ trade: t }) {
   const modifyTrade    = useTradeStore((s) => s.modifyTrade)
 
   const currentBar = bars[cursor - 1]
-  const dec = guessDecimals(t.entry)
+  
+  // Use symbolConfig precision for consistent decimal places
+  const dec = symbolConfig
+    ? getDecimalPlaces(symbolConfig.tick_size || symbolConfig.pip_size || 0.0001)
+    : 4;
 
   // Calculate floating PnL using proper pip-based calculation
   const fp = useMemo(() => {
@@ -58,10 +63,10 @@ export function OpenPositionCard({ trade: t }) {
       {/* Header row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
         <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-          <span style={{ color: accent, fontWeight: 700, fontSize: 11 }}>
+          <span style={{ color: accent, fontWeight: 700, fontSize: 13 }}>
             {t.side === 'buy' ? '▲' : '▼'} #{t.id}
           </span>
-          <span style={{ color: C.muted, fontSize: 9 }}>×{t.size}</span>
+          <span style={{ color: C.muted, fontSize: 11 }}>×{t.size}</span>
           {t.comment && (
             <span style={{ color: C.muted, fontSize: 9, fontStyle: 'italic', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {t.comment}
@@ -74,7 +79,7 @@ export function OpenPositionCard({ trade: t }) {
       </div>
 
       {/* Entry / time */}
-      <div style={{ fontSize: 9, color: C.muted, marginBottom: 6 }}>
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>
         Entry:&nbsp;<span style={{ color: C.text }}>{fmt(t.entry, dec)}</span>
         &nbsp;·&nbsp;{fmtDate(t.openTime)}
       </div>
@@ -82,7 +87,7 @@ export function OpenPositionCard({ trade: t }) {
       {/* SL / TP display or edit */}
       {!editing ? (
         <>
-          <div style={{ display: 'flex', gap: 10, fontSize: 9, marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 10, fontSize: 11, marginBottom: 8 }}>
             {t.sl
               ? <span style={{ color: C.red   }}>SL: {fmt(t.sl, dec)}</span>
               : <span style={{ color: C.dim   }}>No SL</span>

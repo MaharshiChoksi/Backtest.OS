@@ -46,7 +46,7 @@ export function MultiChartPane({ chartRefs, rsiRefs }) {
     return (
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '8px 14px', background: 'var(--surf)', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+          <div style={{ padding: '8px 14px', background: 'var(--surf)', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
             {tfDisplayMap[tf] || tf}
           </div>
           <ChartPane
@@ -70,7 +70,7 @@ export function MultiChartPane({ chartRefs, rsiRefs }) {
       <div style={{ display: 'flex', flex: 1, gap: 0, overflow: 'hidden' }}>
         {/* Left chart */}
         <div style={{ width: '50%', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
-          <div style={{ padding: '8px 14px', background: 'var(--surf)', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+          <div style={{ padding: '8px 14px', background: 'var(--surf)', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
             {tfDisplayMap[tf1] || tf1}
           </div>
           <ChartPane
@@ -109,7 +109,7 @@ export function MultiChartPane({ chartRefs, rsiRefs }) {
     <div style={{ display: 'flex', flex: 1, gap: 0, overflow: 'hidden' }}>
       {/* Left chart - full height, 50% width */}
       <div style={{ width: '50%', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
-        <div style={{ padding: '8px 14px', background: 'var(--surf)', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+        <div style={{ padding: '8px 14px', background: 'var(--surf)', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
           {tfDisplayMap[tf1] || tf1}
         </div>
         <ChartPane
@@ -143,7 +143,7 @@ export function MultiChartPane({ chartRefs, rsiRefs }) {
         
         {/* Bottom right chart - 50% of right side */}
         <div style={{ flex: '0 0 50%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '8px 14px', background: 'var(--surf)', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+          <div style={{ padding: '8px 14px', background: 'var(--surf)', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
             {tfDisplayMap[tf3] || tf3}
           </div>
           <ChartPane

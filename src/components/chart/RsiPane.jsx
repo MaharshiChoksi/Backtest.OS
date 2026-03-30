@@ -78,7 +78,7 @@ export function RsiPane({ rsiR, bars, times, rsiVals }) {
 
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
-      <span style={{ position: 'absolute', top: 4, left: 8, fontSize: 9, color: C.purple, letterSpacing: '1px', zIndex: 10, pointerEvents: 'none' }}>
+      <span style={{ position: 'absolute', top: 4, left: 8, fontSize: 11, color: C.purple, letterSpacing: '1px', zIndex: 10, pointerEvents: 'none' }}>
         RSI 14
       </span>
       <div ref={containerRef} style={{ height: 100 }} />

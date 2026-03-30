@@ -52,17 +52,17 @@ function TradesTab() {
         {openTrades.length > 0 ? (
           <>
             <div style={{ padding: '8px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: C.muted, fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase' }}>
+              <span style={{ color: C.muted, fontSize: 11, letterSpacing: '1px', textTransform: 'uppercase' }}>
                 Open ({openTrades.length})
               </span>
-              <span style={{ color: floatingPnl >= 0 ? C.green : C.red, fontSize: 10 }}>
+              <span style={{ color: floatingPnl >= 0 ? C.green : C.red, fontSize: 12 }}>
                 {fmtPnl(floatingPnl)}
               </span>
             </div>
             {openTrades.map((t) => <OpenPositionCard key={t.id} trade={t} />)}
           </>
         ) : (
-          <div style={{ padding: 24, textAlign: 'center', color: C.dim, fontSize: 11, lineHeight: 1.8 }}>
+          <div style={{ padding: 24, textAlign: 'center', color: C.dim, fontSize: 13, lineHeight: 1.8 }}>
             No open positions.<br />Press Play and open a trade.
           </div>
         )}
@@ -81,16 +81,16 @@ function HistoryTab() {
   return (
     <div style={{ flex: 1, overflow: 'auto' }}>
       <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ color: C.muted, fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase' }}>
+        <span style={{ color: C.muted, fontSize: 11, letterSpacing: '1px', textTransform: 'uppercase' }}>
           Closed ({closedTrades.length})
         </span>
-        <span style={{ color: totalPnl >= 0 ? C.green : C.red, fontSize: 11, fontWeight: 700 }}>
+        <span style={{ color: totalPnl >= 0 ? C.green : C.red, fontSize: 13, fontWeight: 700 }}>
           {fmtPnl(totalPnl)}
         </span>
       </div>
 
       {closedTrades.length === 0 && (
-        <div style={{ padding: 24, textAlign: 'center', color: C.dim, fontSize: 11 }}>
+        <div style={{ padding: 24, textAlign: 'center', color: C.dim, fontSize: 13 }}>
           No closed trades yet.
         </div>
       )}
@@ -117,27 +117,27 @@ function ClosedTradeRow({ trade: t }) {
     <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}18` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
         <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-          <span style={{ color: t.side === 'buy' ? C.green : C.red, fontSize: 10, fontWeight: 700 }}>
+          <span style={{ color: t.side === 'buy' ? C.green : C.red, fontSize: 12, fontWeight: 700 }}>
             {t.side === 'buy' ? '▲' : '▼'} #{t.id}
           </span>
-          <span style={{ color: C.muted, fontSize: 9 }}>×{t.size}</span>
+          <span style={{ color: C.muted, fontSize: 11 }}>×{t.size}</span>
         </div>
-        <span style={{ color: t.pnl >= 0 ? C.green : C.red, fontSize: 12, fontWeight: 700 }}>
+        <span style={{ color: t.pnl >= 0 ? C.green : C.red, fontSize: 14, fontWeight: 700 }}>
           {fmtPnl(t.pnl)}
         </span>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: C.muted, marginBottom: 3 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.muted, marginBottom: 3 }}>
         <span>{fmt(t.entry, dec)} → {fmt(t.closePrice, dec)}</span>
         <span style={pill(reasonColor)}>{t.closeReason}</span>
       </div>
 
-      <div style={{ fontSize: 9, color: C.dim }}>
+      <div style={{ fontSize: 11, color: C.dim }}>
         {fmtDate(t.openTime)} → {fmtDate(t.closeTime)}
       </div>
 
       {t.comment && (
-        <div style={{ fontSize: 10, color: C.muted, marginTop: 4, fontStyle: 'italic' }}>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 4, fontStyle: 'italic' }}>
           {t.comment}
         </div>
       )}

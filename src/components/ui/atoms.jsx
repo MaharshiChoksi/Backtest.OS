@@ -8,7 +8,7 @@ export const mkInp = (C) => ({
   color:       C.text,
   borderRadius: 4,
   padding:     '5px 9px',
-  fontSize:    11,
+  fontSize:    13,
   fontFamily:  FONT,
   outline:     'none',
   width:       '100%',
@@ -17,7 +17,7 @@ export const mkInp = (C) => ({
 
 export const mkLabel = (C) => ({
   color:          C.muted,
-  fontSize:       9,
+  fontSize:       11,
   letterSpacing:  '1.2px',
   textTransform:  'uppercase',
   display:        'block',
@@ -33,7 +33,7 @@ export const mkDivider = (C) => ({
 
 export const mkSectionHead = (C) => ({
   color:          C.muted,
-  fontSize:       9,
+  fontSize:       11,
   letterSpacing:  '1.5px',
   textTransform:  'uppercase',
   marginBottom:   10,
@@ -47,7 +47,7 @@ export const pill = (color) => ({
   border:        `1px solid ${color}44`,
   borderRadius:  3,
   padding:       '1px 7px',
-  fontSize:      9,
+  fontSize:      11,
   letterSpacing: '0.5px',
 })
 
@@ -68,7 +68,7 @@ export function TabBar({ tabs, active, onChange }) {
             borderBottom:  `2px solid ${active === t ? C.amber : 'transparent'}`,
             color:         active === t ? C.amber : C.muted,
             cursor:        'pointer',
-            fontSize:      10,
+            fontSize:      12,
             fontFamily:    FONT,
             textTransform: 'uppercase',
             letterSpacing: '1px',
@@ -86,8 +86,8 @@ export function Kv({ label, value, color }) {
   const C = useTheme()
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-      <span style={{ color: C.muted, fontSize: 10 }}>{label}</span>
-      <span style={{ color: color || C.text, fontSize: 10 }}>{value ?? '—'}</span>
+      <span style={{ color: C.muted, fontSize: 12 }}>{label}</span>
+      <span style={{ color: color || C.text, fontSize: 12 }}>{value ?? '—'}</span>
     </div>
   )
 }

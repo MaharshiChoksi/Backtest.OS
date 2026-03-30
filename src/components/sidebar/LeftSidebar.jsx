@@ -3,8 +3,9 @@ import { useTheme }          from '../../store/useThemeStore'
 import { useSimStore }       from '../../store/useSimStore'
 import { useTradeStore }     from '../../store/useTradeStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
+import { getDecimalPlaces } from '../../utils/tradingUtils'
 import { FONT }              from '../../constants'
-import { fmt, fmtPnl, fmtShortDate, guessDecimals } from '../../utils/format'
+import { fmt, fmtPnl, fmtShortDate } from '../../utils/format'
 import { TabBar, Kv, SectionHeader, Divider, pill }  from '../ui/atoms'
 
 export function LeftSidebar({ ema20v, ema50v, bbData, rsiVals }) {
@@ -91,7 +92,7 @@ function InfoTab() {
       )}
 
       <SectionHeader>Session</SectionHeader>
-      <Kv label="File"        value={<span style={{ color: C.muted, fontSize: 9, wordBreak: 'break-all' }}>{fileName.replace(/\.(csv|tsv|txt)$/i, '')}</span>} />
+      <Kv label="File"        value={<span style={{ color: C.muted, fontSize: 11, wordBreak: 'break-all' }}>{fileName.replace(/\.(csv|tsv|txt)$/i, '')}</span>} />
       <Kv label="Total bars"  value={bars.length.toLocaleString()} />
       <Kv label="Visible"     value={cursor.toLocaleString()} />
       <Kv label="From"        value={bars[0]     ? fmtShortDate(bars[0].time)     : '—'} />
@@ -118,11 +119,19 @@ function InfoTab() {
 
 // ── INDIC tab ─────────────────────────────────────────────────
 function IndicTab({ ema20v, ema50v, bbData, rsiVals }) {
-  const C      = useTheme()
-  const indic  = useIndicatorStore()
-  const cursor = useSimStore((s) => s.cursor)
-  const bars   = useSimStore((s) => s.bars)
-  const dec    = useMemo(() => guessDecimals(bars[0]?.close || 1), [bars])
+  const C        = useTheme()
+  const indic    = useIndicatorStore()
+  const cursor   = useSimStore((s) => s.cursor)
+  const bars     = useSimStore((s) => s.bars)
+  const symbolConfig = useSimStore((s) => s.symbolConfig)
+  
+  // Use symbolConfig precision for consistent decimal places
+  const dec = useMemo(() => 
+    symbolConfig 
+      ? getDecimalPlaces(symbolConfig.tick_size || symbolConfig.pip_size || 0.0001)
+      : 4,
+    [symbolConfig]
+  )
 
   const OVERLAYS = [
     { key: 'ema20', label: 'EMA 20',          color: C.amber  },
@@ -141,7 +150,7 @@ function IndicTab({ ema20v, ema50v, bbData, rsiVals }) {
         >
           <div style={{ width: 12, height: 12, borderRadius: 2, background: indic[key] ? color : C.surf3, border: `1px solid ${indic[key] ? color : C.border2}`, flexShrink: 0, transition: 'all .15s' }} />
           <div style={{ width: 18, height: 2, background: color, opacity: indic[key] ? 1 : 0.15, flexShrink: 0 }} />
-          <span style={{ fontSize: 10, color: indic[key] ? C.text : C.muted, fontFamily: FONT }}>{label}</span>
+          <span style={{ fontSize: 12, color: indic[key] ? C.text : C.muted, fontFamily: FONT }}>{label}</span>
         </div>
       ))}
 
@@ -150,7 +159,7 @@ function IndicTab({ ema20v, ema50v, bbData, rsiVals }) {
 
       <div onClick={() => indic.toggle('rsi')} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 0', cursor: 'pointer' }}>
         <div style={{ width: 12, height: 12, borderRadius: 2, background: indic.rsi ? C.purple : C.surf3, border: `1px solid ${indic.rsi ? C.purple : C.border2}`, flexShrink: 0, transition: 'all .15s' }} />
-        <span style={{ fontSize: 10, color: indic.rsi ? C.text : C.muted, fontFamily: FONT }}>RSI (14)</span>
+        <span style={{ fontSize: 12, color: indic.rsi ? C.text : C.muted, fontFamily: FONT }}>RSI (14)</span>
         {indic.rsi && rsiVals[cursor - 1] !== null && (
           <span style={{ ...pill(C.purple), marginLeft: 'auto' }}>{rsiVals[cursor - 1]?.toFixed(1)}</span>
         )}

@@ -1,111 +1,51 @@
-# Backtesting Engine V2.0
+# Backtesting Engine
 
-A comprehensive backtesting platform for forex/futures traders featuring real-time trade simulation, multi-timeframe chart analysis, and persistent trade journaling. Built with React, Zustand state management, and TradingView Lightweight Charts.
+## What is This?
 
----
+Ever wanted to test your trading ideas on historical data without risking real money? That's exactly what this project does. It's a browser-based backtesting platform that lets you replay market data, simulate trades, and see exactly how your strategy would've performed.
 
-## 🎯 Project Overview
+Think of it as a practice range for traders—load some historical price data, set up your trading rules, and watch how your trades would have played out over weeks, months, or even years.
 
-This is a **full-featured backtesting simulator** that allows traders to:
-- Load historical price data (CSV/Parquet format)
-- Simulate trades with visual markers on charts
-- Analyze multiple timeframes simultaneously (1/2/3 charts side-by-side)
-- Track trades in a persistent journal with auto-sync features
-- Calculate accurate P&L with pip-based formulas and lot-size scaling
-- Export trade statistics and performance metrics
-
-**Current Version**: 2.0 (Multi-timeframe support with fixed price precision)
+**Current Version**: 2.0 (Now with simultaneous multi-timeframe analysis and rock-solid price precision)
 
 ---
 
-## ✨ Current Features
+## What Can You Actually Do With It?
 
-### 📊 Multi-Chart Analysis
-- **1-3 Simultaneous Charts**: View 1, 2, or 3 timeframes in smart responsive layout
-  - 1 chart: Full width
-  - 2 charts: 50/50 side-by-side
-  - 3 charts: 1 left (full height) + 2 stacked right (50% each)
-- **Real-time Data Synchronization**: All charts update together during simulation
-- **Independent Indicators Per Timeframe**: Each chart calculates indicators separately
-- **Accurate Price Display**: Full decimal precision with TradingView timestamp conversion
+### See Multiple Timeframes at Once
+Analyze 1, 2, or 3 different timeframes simultaneously in a smart layout. Watch how your entries line up across daily, hourly, and minute charts—all updating together in real-time during playback. Each chart calculates its own technical indicators independently, giving you the full picture without jumping between tabs.
 
-### ▶️ Simulation Controls
-- **Playback Controls**:
-  - Play/Pause with visual toggle
-  - Step forward/backward through bars
-  - Jump to start/end of data
-  - Seek to any position via progress bar
-- **Speed Control**: 0.5x, 1x, 2x, 5x, 10x, 25x, 50x playback speeds
-- **Keyboard Shortcuts**: Space (play/pause), Arrow Right (step forward), Arrow Left (step backward)
+### Play Back Historical Data Like a Video
+Load your CSV or Parquet data and replay it bar by bar. Play at normal speed, pause to analyze, jump ahead, or even go in slow-motion (0.5x) to catch exactly when your trade triggers. Keyboard shortcuts keep you hands-free (spacebar to play/pause, arrow keys to step through bars).
 
-### 🎯 Trade Management
-- **Enter Trades**: Long/Short with entry price, stop loss, take profit
-- **Visual Markers on Chart**: Entry points, SL levels, and TP levels shown as dashed lines
-- **Auto Fill Orders**: SL and TP automatically close positions when price levels hit
-- **Open Position Tracking**: Live floating P&L calculation using pip-based formula
-- **Editable SL/TP**: Update levels during simulation with auto-sync to journal
+### Enter and Track Trades
+Click to enter trades with entry price, stop loss, and take profit levels. The platform shows you exactly where these levels sit on the chart with clean visual markers. If price hits your stop loss or take profit, the trade closes automatically—just like real trading. Your P&L updates in real-time as you play through data.
 
-### 📔 Trade Journal
-- **Persistent Storage**: 27-column tabular format with auto-save to localStorage
-- **Auto-Sync**: Open trades sync instantly, closed trades populate with final P&L
-- **Editable Fields**: Risk ($), Fees ($), SL, TP with dynamic RR recalculation
-- **Win/Loss Status**: Automatic green/red marking based on PnL
-- **Cumulative Balance**: Tracks account progression trade-by-trade
-- **Export Options**:
-  - TSV format for Excel import
-  - Clear All with confirmation to reset journal
-- **Undo Support**: Press Ctrl+Z to restore cleared entries (within session)
+### Keep a Trade Journal  
+Every trade gets logged in an automatically-syncing journal. Edit your stop losses or profit targets during the replay and watch the journal update instantly. The app calculates your profit/loss, win/loss ratio, and running account balance. Export everything to Excel for deeper analysis or just clear it and start over.
 
-### 💰 Accurate Calculations
-- **Pip-Based P&L Formula**: 
-  - `pnl = (pips × pip_value × lot_size) - (commission × size × 2)`
-  - Accounts for entry and exit fees
-- **Commission Scaling**: Fees scale with lot size (0.5 lots = 50% of commission per side)
-- **Cumulative Balance Tracking**:
-  - First trade: starting_balance (from account config)
-  - Subsequent trades: prev_balance + prev_pnl
-- **Risk/Reward Ratio**: Auto-calculated and updated when SL/TP changes
+### Accurate, Realistic Calculations
+The math is precise: P&L accounts for spread, commissions, lot sizes, and the pips you win or lose. Your account balance tracks through every trade, so you see exactly how your strategy compounds over time.
 
-### 📈 Technical Indicators (Current)
-- **EMA-20**: 20-period exponential moving average
-- **EMA-50**: 50-period exponential moving average
-- **Bollinger Bands**: 20-period SMA with 2σ standard deviation
-- **RSI-14**: 14-period Relative Strength Index (displayed on separate chart)
-- **Toggle Indicators**: Show/hide each indicator independently
+### Technical Indicators On Demand
+See EMA-20, EMA-50, Bollinger Bands, and RSI-14 on your charts. Toggle them on and off independently to keep things clean or get overwhelming detail—your choice.
 
-### 🎨 UI/UX Features
-- **Light/Dark Mode**: Full theme switching with persistent preference
-- **Real-time Hover Data**: OHLCV tooltip follows crosshair
-- **Resizable Panels**: Drag to adjust right panel (trades) and bottom journal width
-- **Responsive Layout**: Adapts to window size automatically
-- **Color-Coded Status**: Green (win), Red (loss), Amber (in progress)
-
-### 💾 Data Management
-- **IndexedDB Caching**: Automatically caches parsed data for fast reload
-- **Symbol Configuration**: Pip size, pip value, decimal places auto-detected
-- **Account Configuration**: Starting balance, spread, commission, leverage, margin requirements
-- **Date Range Selection**: Load full data or specific date ranges
-- **CSV/Parquet Parsing**: Auto-detects delimiters and column mapping
+### Light & Dark Themes
+Trading late night? Dark mode is there. Prefer daylight mode? Switch instantly. Your preference sticks around between sessions.
 
 ---
 
-## 🔧 Technical Stack
+## Under the Hood
 
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 18, Vite 6.4 |
-| **State Management** | Zustand (5 stores) |
-| **Charts** | TradingView Lightweight Charts |
-| **Styling** | CSS-in-JS (inline styles) |
-| **Data Storage** | IndexedDB (caching), localStorage (journal) |
-| **Data Parsing** | Apache Arrow (Parquet), CSV delimiter detection |
-| **Build Tools** | Vite, npm |
+This is built with modern web technologies that make it fast and responsive:
 
-### Architecture Highlights
-- **Hot Loop Simulation**: Ref-based updates to minimize React re-renders at high speeds
-- **Multi-Timeframe Engine**: Bars aggregation M1→M5/H1/D1 with time-based matching
-- **Timestamp Precision**: Milliseconds (storage) → Seconds (TradingView) conversion
-- **Modular Stores**: Separate Zustand stores for trades, journal, simulation, indicators, theme
+- **React**: The JavaScript framework powering the UI
+- **Vite**: Super-fast build and development tool
+- **Zustand**: Dead-simple state management (we split logic into 5 focused stores)
+- **TradingView Lightweight Charts**: The charting library that renders everything smoothly
+- **IndexedDB**: Browser-level database for caching data so you don't have to reload it every time
+- **LocalStorage**: Saves your trade journal between sessions
+- **Apache Arrow**: For parsing Parquet files if you want to use that format
 
 ---
 
@@ -166,9 +106,9 @@ BackTestingEngine/
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js 16+ with npm
+- Node.js 20+ with npm
 
-### Installation
+### Installation for Feature Upgrade.
 
 1. **Clone/Download Repository**
    ```bash
@@ -184,8 +124,6 @@ BackTestingEngine/
    ```bash
    npm run dev
    ```
-   - Opens on `http://localhost:5174` (or next available port)
-   - Hot Module Reload (HMR) enabled for live updates
 
 4. **Build for Production**
    ```bash
@@ -194,53 +132,35 @@ BackTestingEngine/
 
 ### First-Time Setup
 
-1. **Load Data**:
-   - Click **Upload CSV/Parquet** button
-   - Select your OHLCV data file
-   - System auto-detects columns and timeframe
+1. **Load some data**: Click the upload button and pick a CSV or Parquet file with OHLCV (Open, High, Low, Close, Volume) data. The system figures out the columns automatically.
 
-2. **Configure Symbol**:
-   - Symbol lookup auto-populates pip size/value
-   - Or manually enter tick size and pip details
+2. **Set up your symbol**: Enter the currency pair (like EURUSD) or the system looks it up for you. You need to tell it the pip size and how many decimals to use.
 
-3. **Set Account**:
-   - Starting balance (default: $10,000)
-   - Spread, commission, leverage, margin requirements
+3. **Configure your account**: How much starting capital? What's the spread, commission, and leverage? Fill these in once.
 
-4. **Select Timeframes**:
-   - Choose 1-3 timeframes (M1, M5, M15, M30, H1, H4, D1)
-   - Data auto-aggregates for higher timeframes
-   - Optional: Select date range for partial data load
+4. **Pick your timeframes**: Want to see 1-minute, 5-minute, and hourly charts? Choose up to 3. Optional: filter to a specific date range if your dataset is huge.
 
-5. **Start Simulation**:
-   - Click "Start Backtest"
-   - Charts load with indicators
-   - Ready to enter trades and simulate
+5. **Hit "Start Backtest"**: The charts load, indicators populate, and you're ready to start clicking in trades.
 
 ---
 
-## 📊 Data Format
+## Data You Can Use
 
-### Supported Formats
-- **CSV**: Auto-detects delimiters (`,`, `\t`, `;`, `|`)
-- **Parquet**: Via Apache Arrow
+### File Types
+The app accepts CSV files and Parquet files. It's smart about figuring out what column is what, even if they're separated by commas, tabs, or semicolons.
 
-### Required Columns
+### What the Data Looks Like
+You need columns for: time (dates), open, high, low, close, and volume. That's it.
+Here user your file can have tab seperated values for **date** and **time** seeprately as well and our parser will auto merge it. 
+Example:
 ```
-time (YYYY-MM-DD HH:MM:SS or Unix timestamp)
-open
-high
-low
-close
-volume
+date,time,open,high,low,close,volume
+2020-01-02 00:00:00,0.6630,0.6650,0.6625,0.6645,50000
+2020-01-02 01:00:00,0.6645,0.6660,0.6640,0.6655,45000
 ```
 
-### Data Constraints
-- **Maximum Bars**: 1.5 million bars per chart (3 charts × 1.5M = system limit)
-  - Prevents memory exhaustion from simultaneous chart rendering
-  - Applies per timeframe during aggregation
-- **Date Range**: Optional start/end filter to load partial datasets
-- **Timeframe**: Auto-detected from bar times; supports M1/M5/M15/M30/H1/H4/D1
+### Fair Warning on Large Datasets
+I Recommend loading upto 1 million bars per chart. If you're running 3 charts, that's 4.5 million total bars. It'll work, but don't go crazy—your browser still has limits. The system will warn you if you're pushing it.
 
 ---
 
@@ -276,238 +196,106 @@ volume
 
 ### Journal Management
 
-- **View All Trades**: Scroll journal table with 27 columns
-- **Export**: TSV format for Excel analysis
-- **Clear Journal**: Delete all entries (with undo support)
-- **Auto-Persistence**: Saves automatically to localStorage every change
+The journal keeps records of every trade: entry time, price, size, P&L, whether you won or lost, and your running account balance. You can export it as a spreadsheet for deeper analysis. If you mess something up, hit Ctrl+Z to undo clearing entries.
 
 ---
 
-## 🔮 Planned Features
+## What's Next?
 
-### Phase 3: Additional Indicators (Coming Soon)
+Down the road, we're thinking about adding:
+- More customizable indicators (pick your own periods for moving averages, etc.)
+- Session boxes (mark time zones and session ranges on your charts)
+- Support for backtesting multiple symbols at once
+- A performance dashboard with more detailed statistics
 
-Default indicators (EMA20, EMA50, BB, RSI) always available.
-
-**User-Configurable Indicators**:
-
-#### A) MA1 & MA2 - Dual Moving Averages
-- User selects **period** (5, 10, 20, 50, 100, 200, etc.)
-- User selects **type**:
-  - Simple Moving Average (SMA)
-  - Exponential Moving Average (EMA)
-  - Weighted Moving Average (WMA)
-- Displayed on all 3 charts
-- Configurable colors and line styles
-
-#### B) Session Box & Asian/Previous Day H/L Indicator
-- **Parameters** configured on upload screen:
-  - Session time zones (NY, EU, Asia, etc.)
-  - Asian session hours
-  - Previous day reference
-- **Display**: Rectangle boxes marking session ranges
-- **Levels**: Horizontal lines for Asia H/L, Previous Day H/L
-- Applied consistently across all timeframes
-
-#### C) Swing High/Low Indicator
-- **Parameters**:
-  - Lookback period (2, 5, 10, 20 bars)
-  - Sensitivity threshold
-- **Display**: Markers at confirmed swing points
-- **Use Case**: Identify support/resistance levels automatically
-
-### Implementation Details
-
-- **Indicator Configuration Panel**: On upload screen during setup
-- **Params Storage**: Saved with backtest session in Zustand
-- **Calculation**: Pre-computed for all bars to avoid lag
-- **Performance**: Memoized to prevent unnecessary recalculations
-- **Visibility**: Each indicator toggleable independently
+But honestly, the current version does what most traders need right now.
 
 ---
 
-## 🎯 Key Performance Features
+## Performance
 
-### Simulation Performance
+The app is built to be fast. The simulation engine runs every 16 milliseconds, which means you can replay data at 50x speed smoothly without the UI locking up. We're using some tricks like ref-based updates and lazy calculations to keep things snappy even with massive datasets.
 
-| Metric | Performance |
-|--------|-------------|
-| **Hot Loop Tick Rate** | Every 16ms at 50× speed (ref-based, no React re-renders) |
-| **UI Sync Rate** | 80ms (12 FPS progress bar updates) |
-| **Bar Processing** | ~50K bars/second on modern hardware |
-| **Memory Usage** | ~50MB for 1.5M bars + 3 charts |
-
-### Memory Optimization
-
-- **IndexedDB Caching**: Instant reload of previous sessions
-- **Ref-Based Updates**: Simulation loop doesn't trigger React renders
-- **Lazy Indicator Calculation**: Only computed on demand
-- **Data Aggregation**: Higher timeframes computed on-demand from base TF
+If you're running typical trading data (a few hundred thousand bars), you won't notice any lag. Even at 1.5 million bars per chart, it stays responsive.
 
 ---
 
 ## 🐛 Known Limitations
 
-- **3-Chart Maximum**: Simultaneous rendering limit for real-time performance
-- **1.5M Bar Limit**: Per chart to prevent memory issues
-- **Single Data Source**: Bars must be from same symbol (future: multi-symbol support)
-- **Manual Timeframe Setup**: User must select all timeframes upfront (no dynamic addition during simulation)
+- Can't display more than 3 charts at once (the rendering would get too heavy)
+- 1 million bars per chart is the practical limit before things slow down
+- Right now you're working with one symbol at a time
+- You have to pick all your timeframes upfront—you can't add a new one mid-backtest
 
 ---
 
-## 🔒 Data Privacy & Caching
+## Privacy & Data
 
-- **All Data Local**: No cloud upload or external API calls (except symbol definitions)
-- **IndexedDB Storage**: Browser-level caching for fast reload
-- **LocalStorage Journal**: Trade history persists across browser sessions
-- **Cache Clearing**: Manual "Clear Cache" button available (doesn't delete journal)
-- **Session Restore**: Complete backtest state recoverable from cache after crash
+Everything stays on your machine. Your data never leaves your browser. We cache things locally so reopening the app is fast, and your trade journal is saved in browser storage so your work sticks around. You can clear the cache if you want a fresh start, and there's a button to wipe the journal anytime.
 
 ---
 
-## 🛠️ Development
+## Notes for Developers
 
-### Key Concepts
+The codebase is organized to be pretty straightforward:
 
-#### Hot Loop Design
-The simulation engine uses a reference-based hot loop to maintain responsiveness at 50× speed:
-```
-1. Recursive setTimeout (respects speed changes)
-2. Reads ONLY refs (cursorRef, playingRef, speedRef)
-3. Single 80ms UI-sync timer for Zustand updates
-4. Button actions bypass event queue via direct DOM capture
-```
+- **State is centralized** using Zustand stores (separate store for trades, journal, simulation, etc.)
+- **The simulation engine** is its own hook that handles all the bar-by-bar replay logic
+- **Components are divided by feature**, not by technical layers
+- **Performance tricks used**: We use refs to avoid re-rendering during fast playback, and calculations are memoized to avoid unnecessary work
 
-#### Multi-Timeframe Architecture
-```
-Base Timeframe (M1, raw data)
-           ↓
-[barsMap: { tf → bars }]
-           ↓
-    Each Chart Instance
-    ├── Real-time updates via time-based bar matching
-    ├── Independent indicator calculations
-    └── Synchronized playback cursor
-```
-
-#### Timestamp Handling
-- **Storage**: Milliseconds (Unix × 1000)
-- **Conversion**: `msToSeconds()` for TradingView API
-- **Consistency**: Applied at upload, setData, and update steps
-
-### Code Patterns
-
-**Zustand Store Creation**:
-```javascript
-import { create } from 'zustand'
-
-export const useTradeStore = create((set) => ({
-  trades: [],
-  addTrade: (trade) => set((s) => ({ trades: [...s.trades, trade] })),
-  // ...
-}))
-```
-
-**Callback Memoization**:
-```javascript
-const updateChart = useCallback((bar) => {
-  chartRef.current?.update(bar)
-}, [chartRef])  // Only include stable refs
-```
+If you want to dig into the code or contribute improvements, start with the hooks and stores—that's where the logic lives. Components are mostly just rendering what the stores tell them to show.
 
 ---
 
-## 📋 Changelog
+## Version History
 
-### V2.0 (Current)
-- ✅ Multi-timeframe support (1/2/3 charts)
-- ✅ Fixed timestamp precision (ms → seconds)
-- ✅ All charts sync during simulation
-- ✅ Responsive layout (1/2/3 adaptive)
-- ✅ React hooks violation fixed (useRef outside useMemo)
-- ✅ PnL accuracy with lot-size scaling
+**V2.0** (Right now)
+- Multi-timeframe support (run 1, 2, or 3 charts together)
+- Fixed all the timestamp precision issues
+- Charts all sync up during playback
+- Smart responsive layout adapts to how many charts you're viewing
+- P&L calculations are rock-solid with proper lot-size scaling
 
-### V1.5
-- ✅ Trade journal with 27 columns
-- ✅ Editable SL/TP/Risk with auto-sync
-- ✅ Floating PnL in sidebar/header
-- ✅ First trade balance fix
+**V1.5**
+- Added the full trade journal with all the important stats
+- You can now edit stop losses and take profits mid-backtest
+- Running P&L shows in real-time
 
-### V1.0
-- ✅ Core backtesting engine
-- ✅ Single-chart simulation
-- ✅ Trade markers and P&L calculations
-- ✅ Journal persistence
+**V1.0**
+- The original backtesting engine
+- Single chart support
+- Basic trade entry and P&L math
 
 ---
 
-## 📝 Notes for Future Development
+## Future Ideas
 
-1. **Indicator Parameters**:
-   - Store user selections in `IndicatorStore`
-   - Pre-compute during data load phase
-   - Pass to `useSimEngine` via props
+If we keep building on this:
+- Let traders customize which indicators they see and at what settings
+- Add more built-in indicators beyond the current EMA-20, EMA-50, Bollinger Bands, and RSI
+- Support backtesting across multiple symbols at once
+- Create better performance reporting and analytics dashboards
+- Build some basic strategy optimization tools
 
-2. **Bar Limiting**:
-   - Implement on `UploadScreen.jsx`
-   - Show warning if bars exceed 1.5M per chart
-   - Add progress bar for data loading/aggregation
-
-3. **Performance Testing**:
-   - Test with full 1.5M bars dataset
-   - Profile memory usage at scale
-   - Optimize aggregation algorithm if needed
-
-4. **Future Features** (Post-V2.0):
-   - Multi-symbol backtesting
-   - Correlation analysis
-   - Risk metrics dashboard
-   - Strategy optimization
-   - Order history export with statistics
+Right now though, the foundation is solid and does everything a trader needs for manual backtesting.
 
 ---
 
 ## 🤝 Contributing
 
-To contribute improvements:
-1. Test features thoroughly in development
-2. Follow existing code patterns (Zustand stores, useCallback memoization)
-3. Add appropriate error handling and logging
-4. Update README for significant changes
+Found a bug? Want to add a feature? Great! Here's what helps:
+1. Test your changes thoroughly
+2. Follow the existing code patterns (we use Zustand for state and React hooks for logic)
+3. Don't forget to add error handling if you're adding new features
+4. Update the README if you add something significant
 
 ---
 
-## 📞 Support & Feedback
-
-For bugs, feature requests, or questions:
-- Check existing code comments
-- Review Zustand store implementations
-- Test with sample data in `public/data/`
+**Built by traders, for traders.** Happy testing!
 
 ---
 
-**Happy Backtesting! 📈**
+**Project Lead**: [@maharshichoksi](https://github.com/MaharshiChokski)
 
----
-
-## Tech Stack
-
-**Client/Frontend:**  
-    - React  
-    - CSS
-
-**Server:**  
-    - Python  
-    - FastAPI  
-    - duckdb  
-    - pandas  
-    - numpy
-
----
-
-## Authors
-- [@maharshichoksi](https://github.com/MaharshiChoksi) - Project Lead & Core Development
-- **GitHub Copilot** - AI Assistant & Development Helper
-  - Multi-timeframe architecture design & implementation
-  - Simulation engine optimization (hot loop design)
-  - Documentation and code refactoring 
+**AI Assistance**: GitHub Copilot helped with architecture design, the simulation engine optimization, and documentation. 

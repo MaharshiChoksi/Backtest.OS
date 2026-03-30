@@ -3,6 +3,7 @@ import { useTheme }        from '../../store/useThemeStore'
 import { useSimStore }     from '../../store/useSimStore'
 import { useTradeStore }   from '../../store/useTradeStore'
 import { useJournalStore } from '../../store/useJournalStore'
+import { getDecimalPlaces } from '../../utils/tradingUtils'
 import { FONT }            from '../../constants'
 import { fmt, fmtPnl }     from '../../utils/format'
 import { SectionHeader }   from '../ui/atoms'
@@ -65,7 +66,10 @@ export function JournalTab() {
     return displayEntries.reduce((sum, e) => sum + (e.pnlUsd || 0), 0)
   }, [displayEntries])
 
-  const pip_size = symbolConfig?.pip_size || 0.0001
+  // Get decimal places from symbolConfig for consistent price formatting
+  const priceDecimals = symbolConfig
+    ? getDecimalPlaces(symbolConfig.tick_size || symbolConfig.pip_size || 0.0001)
+    : 5
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: C.surf }}>
@@ -104,7 +108,7 @@ export function JournalTab() {
                 border: `1px solid ${confirmClear ? C.red : C.border}`,
                 background: confirmClear ? C.red + '15' : 'transparent',
                 color: confirmClear ? C.red : C.muted,
-                fontSize: 10,
+                  fontSize: 12,
                 cursor: 'pointer',
                 transition: 'all .2s',
               }}
@@ -149,7 +153,7 @@ export function JournalTab() {
             Closed ({entries.filter(e => e.exitPrice).length})
           </button>
           {displayEntries.length > 0 && (
-            <div style={{ marginLeft: 'auto', fontSize: 11, color: totalPnl >= 0 ? C.green : C.red }}>
+            <div style={{ marginLeft: 'auto', fontSize: 13, color: totalPnl >= 0 ? C.green : C.red }}>
               Total P/L: {fmtPnl(totalPnl)}
             </div>
           )}
@@ -174,7 +178,7 @@ export function JournalTab() {
             removeEntry={removeEntry}
             showClosed={showClosed}
             C={C}
-            pip_size={pip_size}
+            priceDecimals={priceDecimals}
           />
         </div>
       )}
@@ -183,7 +187,7 @@ export function JournalTab() {
 }
 
 // ── Journal Table Component ────────────────────────────────────
-function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, removeEntry, showClosed, C, pip_size }) {
+function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, removeEntry, showClosed, C, priceDecimals }) {
   const columnDefs = [
     // Account Details
     { key: 'account', label: 'ACCOUNT', width: 100, editable: true, type: 'dropdown', options: ACCOUNTS },
@@ -196,7 +200,7 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
     { key: 'entryTime', label: 'ENTRY TIME', width: 90, editable: false },
     { key: 'pair', label: 'PAIR', width: 80, editable: true, type: 'dropdown', options: SYMBOLS },
     { key: 'direction', label: 'DIRECTION', width: 80, editable: true, type: 'dropdown', options: ['BUY', 'SELL'] },
-    { key: 'entryPrice', label: 'ENTRY PRICE', width: 100, editable: false, format: (v) => v.toFixed(5) },
+    { key: 'entryPrice', label: 'ENTRY PRICE', width: 100, editable: false, format: (v) => v.toFixed(priceDecimals) },
     { key: 'lotSize', label: 'LOT SIZE', width: 80, editable: true, format: (v) => v.toFixed(2) },
     
     // Session & Strategy
@@ -207,8 +211,8 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
     { key: 'entryTf', label: 'ENTRY TF', width: 100, editable: true, type: 'dropdown', options: TF_OPTIONS },
     
     // Position Management
-    { key: 'stopLoss', label: 'STOP LOSS', width: 100, editable: true, format: (v) => v ? v.toFixed(5) : '—' },
-    { key: 'takeProfit', label: 'TAKE PROFIT', width: 110, editable: true, format: (v) => v ? v.toFixed(5) : '—' },
+    { key: 'stopLoss', label: 'STOP LOSS', width: 100, editable: true, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
+    { key: 'takeProfit', label: 'TAKE PROFIT', width: 110, editable: true, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
     { key: 'risk', label: 'RISK ($)', width: 90, editable: true, format: (v) => `$${v.toFixed(2)}` },
     { key: 'fees', label: 'FEES ($)', width: 85, editable: true, format: (v) => `$${v.toFixed(2)}` },
     
@@ -216,7 +220,7 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
     { key: 'pnlUsd', label: 'P/L ($)', width: 90, editable: false, format: (v) => fmtPnl(v) },
     { key: 'pnlPips', label: 'P/L (PIPS)', width: 100, editable: false, format: (v) => v.toFixed(1) },
     { key: 'rr', label: 'RR', width: 70, editable: false, format: (v) => v.toFixed(2) },
-    { key: 'exitPrice', label: 'EXIT PRICE', width: 110, editable: false, format: (v) => v ? v.toFixed(5) : '—' },
+    { key: 'exitPrice', label: 'EXIT PRICE', width: 110, editable: false, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
     { key: 'exitDate', label: 'EXIT DATE', width: 100, editable: false },
     { key: 'exitTime', label: 'EXIT TIME', width: 90, editable: false },
     { key: 'winLoss', label: 'WIN/LOSS', width: 80, editable: false },
@@ -240,6 +244,7 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
                 whiteSpace: 'nowrap',
                 borderRight: `1px solid ${C.border}`,
                 background: C.bg,
+                fontSize: 11,
               }}
             >
               {col.label}

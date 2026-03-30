@@ -33,11 +33,15 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
   useEffect(() => {
     if (!containerRef.current || !bars.length) return
 
+    // Calculate minMove from tick_size
+    const minMove = symbolConfig ? symbolConfig.tick_size : 0.00001
+    
     const chart = createChart(containerRef.current, {
       layout: {
         background:  { color: C.bg },
         textColor:   C.muted,
         fontFamily:  '"JetBrains Mono","SF Mono",monospace',
+        fontSize: 13,
       },
       grid: {
         vertLines: { color: C.border },
@@ -50,14 +54,22 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
       },
       rightPriceScale: { 
         borderColor: C.border, 
-        format: { type: 'price', precision: decimals, minMove: symbolConfig ? symbolConfig.tick_size : 0.00001 },
+        // Format with explicit minMove and precision to match tick_size
+        format: { type: 'price', precision: decimals, minMove },
         autoScale: true,
         mode: 0,  // 0 = normal scale (linear), 1 = logarithmic
+        scaleMargins: { top: 0.1, bottom: 0.1 },
       },
       timeScale:       { borderColor: C.border, timeVisible: true, secondsVisible: false },
+      localization: {
+        locale: 'en-US',
+        dateFormat: 'yyyy-MM-dd',
+        timeFormat: 'HH:mm',
+      },
     })
 
     // ── Candle series ──
+    // Make sure priceFormat matches right price scale precisely
     const candle = chart.addCandlestickSeries({
       upColor:        C.green,
       downColor:      C.red,
@@ -65,7 +77,7 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
       borderDownColor:C.red,
       wickUpColor:    C.green + '99',
       wickDownColor:  C.red  + '99',
-      priceFormat:    { type: 'price', precision: decimals },
+      priceFormat:    { type: 'price', precision: decimals, minMove },
     })
 
     // ── Volume histogram (hidden price scale) ──

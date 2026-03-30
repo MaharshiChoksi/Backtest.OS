@@ -316,13 +316,13 @@ export function UploadScreen() {
     >
       {/* Brand */}
       <div style={{ textAlign: 'center', marginBottom: 48 }}>
-        <div style={{ fontSize: 15, color: C.muted, letterSpacing: '5px', textTransform: 'uppercase', marginBottom: 8 }}>
+        <div style={{ fontSize: 17, color: C.muted, letterSpacing: '5px', textTransform: 'uppercase', marginBottom: 8 }}>
           MULTI-SYMBOL
         </div>
-        <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: 4, color: C.text }}>
+        <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: 4, color: C.text }}>
           BACKTEST<span style={{ color: C.amber }}>.</span>OS
         </div>
-        <div style={{ fontSize: 12, color: C.muted, letterSpacing: '2px', marginTop: 6 }}>
+        <div style={{ fontSize: 14, color: C.muted, letterSpacing: '2px', marginTop: 6 }}>
           SIMULATION ENGINE · MARKET REPLAY
         </div>
         <div style={{ width: 40, height: 1, background: C.amber + '50', margin: '18px auto 0' }} />
@@ -392,7 +392,7 @@ export function UploadScreen() {
                 <div style={{ color: drag ? C.amber : C.text, fontSize: 14, marginBottom: 8, padding: '10px' }}>
                   Drop OHLCV data file here
                 </div>
-                <div style={{ color: C.muted, fontSize: 11, padding: '5px' }}>CSV · TSV · TXT · Parquet</div>
+                <div style={{ color: C.muted, fontSize: 13, padding: '5px' }}>CSV · TSV · TXT · Parquet</div>
                 <div
                   style={{
                     marginTop: 18,
@@ -575,7 +575,7 @@ export function UploadScreen() {
               <span style={head}>Data Preview — First 10 rows</span>
             </div>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: C.surf2 }}>
                     {parsed.headers.map((h) => {
@@ -623,7 +623,7 @@ export function UploadScreen() {
           </div>
 
           {error && (
-            <div style={{ color: C.red, fontSize: 11, marginBottom: 12 }}>⚠ {error}</div>
+            <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>⚠ {error}</div>
           )}
 
           {status && (
@@ -669,7 +669,7 @@ export function UploadScreen() {
         <div style={{ width: '100%', maxWidth: 600 }}>
           <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 28, marginBottom: 20 }}>
             <span style={head}>Select Trading Symbol</span>
-            <p style={{ color: C.muted, fontSize: 12, marginTop: 8, marginBottom: 16 }}>
+            <p style={{ color: C.muted, fontSize: 14, marginTop: 8, marginBottom: 16 }}>
               Enter the symbol name from the config (e.g., EURUSD, GBPUSD, XAUUSD)
             </p>
 
@@ -707,7 +707,7 @@ export function UploadScreen() {
 
             {foundSymbol && (
               <div style={{ background: C.surf2, border: `1px solid ${C.amber}40`, borderRadius: 6, padding: 16, marginBottom: 20 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12 }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 12 }}>
                   ✓ Found: {foundSymbol.symbol}
                 </div>
 

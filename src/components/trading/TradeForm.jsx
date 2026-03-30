@@ -2,18 +2,24 @@ import { useState } from 'react'
 import { useTheme }      from '../../store/useThemeStore'
 import { useSimStore }   from '../../store/useSimStore'
 import { useTradeStore } from '../../store/useTradeStore'
+import { getDecimalPlaces } from '../../utils/tradingUtils'
 import { FONT }          from '../../constants'
-import { fmt, guessDecimals } from '../../utils/format'
+import { fmt } from '../../utils/format'
 import { mkInp, mkLabel, SectionHeader } from '../ui/atoms'
 
 export function TradeForm() {
   const C          = useTheme()
   const bars       = useSimStore((s) => s.bars)
   const cursor     = useSimStore((s) => s.cursor)
+  const symbolConfig = useSimStore((s) => s.symbolConfig)
   const openTrade  = useTradeStore((s) => s.openTrade)
 
   const currentBar = bars[cursor - 1]
-  const dec        = guessDecimals(currentBar?.close || 1)
+  
+  // Use symbolConfig precision for consistent decimal places
+  const dec = symbolConfig
+    ? getDecimalPlaces(symbolConfig.tick_size || symbolConfig.pip_size || 0.0001)
+    : 4;
 
   const [side,    setSide]    = useState('buy')
   const [size,    setSize]    = useState('0.1')
@@ -57,7 +63,7 @@ export function TradeForm() {
               padding:    '7px 0',
               borderRadius: 4,
               cursor:     'pointer',
-              fontSize:   11,
+              fontSize:   13,
               fontFamily: FONT,
               fontWeight: 700,
               letterSpacing: '0.5px',
@@ -110,7 +116,7 @@ export function TradeForm() {
 
       {/* At market */}
       {currentBar && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: 10, color: C.muted }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: 12, color: C.muted }}>
           <span>At market</span>
           <span style={{ color: C.text }}>{fmt(currentBar.close, dec)}</span>
         </div>

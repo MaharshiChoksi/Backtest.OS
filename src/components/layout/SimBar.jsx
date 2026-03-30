@@ -74,7 +74,7 @@ export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
         borderRadius: 5,
         padding: primary ? "7px 22px" : "7px 12px",
         cursor: "pointer",
-        fontSize: primary ? 14 : 12,
+        fontSize: primary ? 16 : 14,
         fontFamily: FONT,
         fontWeight: primary ? 700 : 400,
         transition: "all .15s",
@@ -105,7 +105,7 @@ export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
             border: `1px solid ${speed === v ? C.amber : C.border2}`,
             color: speed === v ? C.amber : C.muted,
             borderRadius: 4, padding: "4px 8px", cursor: "pointer",
-            fontSize: 10, fontFamily: FONT, transition: "all .15s",
+            fontSize: 12, fontFamily: FONT, transition: "all .15s",
           }}>
             {label}
           </button>
@@ -115,7 +115,7 @@ export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
       <div style={{ width: 1, height: 24, background: C.border }} />
 
       {/* Bar counter */}
-      <span style={{ color: C.muted, fontSize: 10, flexShrink: 0 }}>{cursor.toLocaleString()}</span>
+      <span style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>{cursor.toLocaleString()}</span>
 
       {/* Progress track */}
       <div
@@ -132,7 +132,7 @@ export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
             position: "absolute", bottom: "calc(100% + 8px)",
             left: `${hoverPct * 100}%`, transform: "translateX(-50%)",
             background: C.surf2, border: `1px solid ${C.border2}`,
-            borderRadius: 4, padding: "3px 8px", fontSize: 9,
+            borderRadius: 4, padding: "3px 8px", fontSize: 11,
             color: C.text, whiteSpace: "nowrap", pointerEvents: "none",
           }}>
             Bar {Math.round(hoverPct * total).toLocaleString()}
@@ -149,7 +149,7 @@ export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
         </div>
       </div>
 
-      <span style={{ color: C.muted, fontSize: 10, flexShrink: 0 }}>{total.toLocaleString()}</span>
+      <span style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>{total.toLocaleString()}</span>
 
       <div style={{ width: 1, height: 24, background: C.border }} />
 

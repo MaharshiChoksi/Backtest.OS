@@ -1,9 +1,10 @@
 import { useThemeStore } from "../../store/useThemeStore";
 import { useSimStore }   from "../../store/useSimStore";
 import { useTradeStore } from "../../store/useTradeStore";
+import { getDecimalPlaces } from "../../utils/tradingUtils";
 import { FONT } from "../../constants/index";
 import { pill } from "../ui/atoms";
-import { fmt, fmtPnl, fmtDate, guessDecimals } from "../../utils/format";
+import { fmt, fmtPnl, fmtDate } from "../../utils/format";
 
 export function Header({ onReset, hoverBar }) {
   const C             = useThemeStore((s) => s.C);
@@ -14,7 +15,11 @@ export function Header({ onReset, hoverBar }) {
   const currentBar  = bars[cursor - 1];
   const prevBar     = bars[cursor - 2];
   const dispBar     = hoverBar || currentBar;
-  const dec         = guessDecimals(bars[0]?.close || 1);
+  
+  // Use symbolConfig precision if available, otherwise calculate from tick_size
+  const dec = symbolConfig 
+    ? getDecimalPlaces(symbolConfig.tick_size || symbolConfig.pip_size || 0.0001)
+    : 4;
 
   const pctChange   = currentBar && prevBar
     ? (currentBar.close - prevBar.close) / prevBar.close * 100
@@ -39,7 +44,7 @@ export function Header({ onReset, hoverBar }) {
     <div style={{ height: 46, background: C.surf, borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", padding: "0 16px", gap: 10, flexShrink: 0, fontFamily: FONT, userSelect: "none" }}>
 
       {/* Brand */}
-      <button onClick={onReset} style={{ color: C.amber, fontWeight: 700, letterSpacing: 3, fontSize: 13, background: "none", border: "none", cursor: "pointer", fontFamily: FONT, padding: 0, flexShrink: 0 }}>
+      <button onClick={onReset} style={{ color: C.amber, fontWeight: 700, letterSpacing: 3, fontSize: 15, background: "none", border: "none", cursor: "pointer", fontFamily: FONT, padding: 0, flexShrink: 0 }}>
         BACKTEST<span style={{ color: C.muted }}>.</span>OS
       </button>
       <div style={V} />
@@ -48,7 +53,7 @@ export function Header({ onReset, hoverBar }) {
 
       {/* OHLCV ticker */}
       {dispBar && (
-        <div style={{ display: "flex", gap: 14, fontSize: 11, overflow: "hidden" }}>
+        <div style={{ display: "flex", gap: 14, fontSize: 13, overflow: "hidden" }}>
           <span style={{ color: C.muted }}>{fmtDate(dispBar.time)}</span>
           <span>O&nbsp;<span style={{ color: C.text }}>{fmt(dispBar.open, dec)}</span></span>
           <span>H&nbsp;<span style={{ color: C.green }}>{fmt(dispBar.high, dec)}</span></span>
@@ -62,20 +67,20 @@ export function Header({ onReset, hoverBar }) {
       )}
 
       {/* Right side — P&L + controls */}
-      <div style={{ marginLeft: "auto", display: "flex", gap: 14, alignItems: "center", fontSize: 10, flexShrink: 0 }}>
+      <div style={{ marginLeft: "auto", display: "flex", gap: 14, alignItems: "center", fontSize: 12, flexShrink: 0 }}>
         <span style={{ color: C.muted }}>REALIZED</span>
-        <span style={{ color: totalPnl >= 0 ? C.green : C.red, fontSize: 12, fontWeight: 700 }}>{fmtPnl(totalPnl)}</span>
+        <span style={{ color: totalPnl >= 0 ? C.green : C.red, fontSize: 14, fontWeight: 700 }}>{fmtPnl(totalPnl)}</span>
         <div style={V} />
         <span style={{ color: C.muted }}>FLOATING</span>
-        <span style={{ color: floatingPnl >= 0 ? C.green : C.red, fontSize: 12 }}>{fmtPnl(floatingPnl)}</span>
+        <span style={{ color: floatingPnl >= 0 ? C.green : C.red, fontSize: 14 }}>{fmtPnl(floatingPnl)}</span>
         {openTrades.length > 0 && <span style={pill(C.amber)}>{openTrades.length} open</span>}
         <div style={V} />
-        <span style={{ color: C.muted, fontSize: 9 }}>Space=Play · →/← Step</span>
+        <span style={{ color: C.muted, fontSize: 11 }}>Space=Play · →/← Step</span>
         <div style={V} />
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}
-          style={{ background: C.surf2, border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "4px 10px", cursor: "pointer", fontSize: 10, fontFamily: FONT }}
+          style={{ background: C.surf2, border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontFamily: FONT }}
         >
           {theme === "dark" ? "☀" : "◑"}
         </button>
