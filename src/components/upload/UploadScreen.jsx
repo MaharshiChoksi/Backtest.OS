@@ -125,6 +125,21 @@ export function UploadScreen() {
         return
       }
 
+      // Validate minimum 1-minute bar interval (reject tick data or data closer than 60 seconds)
+      let minInterval = Infinity
+      for (let i = 1; i < unique.length; i++) {
+        const interval = unique[i].time - unique[i - 1].time
+        minInterval = Math.min(minInterval, interval)
+      }
+
+      const MIN_INTERVAL_MS = 60000 // 1 minute
+      if (minInterval < MIN_INTERVAL_MS) {
+        setError(`Data resolution is too high (${(minInterval / 1000).toFixed(0)}s between bars). Minimum supported interval is 1 minute. Tick data is incompatible.`)
+        setStatus('')
+        setProcessing(false)
+        return
+      }
+
       bars.current = unique
       setStatus('💾 Caching data…')
       
@@ -212,6 +227,18 @@ export function UploadScreen() {
   const handleStartBacktest = async () => {
     if (!selectedTimeframes || selectedTimeframes.length === 0) {
       setError('Please select at least one timeframe.')
+      return
+    }
+
+    // Validate that all selected timeframes are >= detected timeframe
+    const detectedMs = getTimeframeMs(detectedTimeframe)
+    const invalidTfs = selectedTimeframes.filter(tf => {
+      const tfMs = getTimeframeMs(tf)
+      return tfMs < detectedMs
+    })
+
+    if (invalidTfs.length > 0) {
+      setError(`Cannot select timeframes lower than detected data resolution (${tfDisplayMap[detectedTimeframe] || detectedTimeframe}). Data cannot be downsampled. Please select only equal or higher timeframes.`)
       return
     }
 
@@ -898,31 +925,42 @@ export function UploadScreen() {
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 4 }}>Select Timeframes (up to 3)</div>
               <div style={{ fontSize: 10, color: C.muted, marginBottom: 12 }}>
-                {detectedTimeframe && <>Detected: <strong>{tfDisplayMap[detectedTimeframe] || detectedTimeframe}</strong></>}
+                {detectedTimeframe && <>Detected: <strong>{tfDisplayMap[detectedTimeframe] || detectedTimeframe}</strong> — select this or higher only</>}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-                {TIMEFRAME_OPTIONS.map((tf) => (
-                  <button
-                    key={tf}
-                    onClick={() => handleToggleTimeframe(tf)}
-                    style={{
-                      padding: '10px',
-                      border: `2px solid ${selectedTimeframes.includes(tf) ? C.amber : C.border2}`,
-                      background: selectedTimeframes.includes(tf) ? C.amber + '20' : C.surf2,
-                      borderRadius: 4,
-                      cursor: selectedTimeframes.length >= 3 && !selectedTimeframes.includes(tf) ? 'not-allowed' : 'pointer',
-                      fontSize: 11,
-                      fontFamily: FONT,
-                      fontWeight: selectedTimeframes.includes(tf) ? 600 : 400,
-                      color: C.text,
-                      opacity: selectedTimeframes.length >= 3 && !selectedTimeframes.includes(tf) ? 0.5 : 1,
-                      transition: 'all .15s',
-                    }}
-                    disabled={selectedTimeframes.length >= 3 && !selectedTimeframes.includes(tf)}
-                  >
-                    {tfDisplayMap[tf] || tf}
-                  </button>
-                ))}
+                {TIMEFRAME_OPTIONS.map((tf) => {
+                  const detectedMs = detectedTimeframe ? getTimeframeMs(detectedTimeframe) : 0
+                  const tfMs = getTimeframeMs(tf)
+                  const isLowerTf = tfMs < detectedMs
+                  const isAtLimit = selectedTimeframes.length >= 3 && !selectedTimeframes.includes(tf)
+                  const isDisabled = isLowerTf || isAtLimit
+
+                  return (
+                    <button
+                      key={tf}
+                      onClick={() => {
+                        if (!isLowerTf) handleToggleTimeframe(tf)
+                      }}
+                      title={isLowerTf ? `Cannot select lower timeframes than ${tfDisplayMap[detectedTimeframe] || detectedTimeframe}` : ''}
+                      style={{
+                        padding: '10px',
+                        border: `2px solid ${selectedTimeframes.includes(tf) ? C.amber : isLowerTf ? C.red + '60' : C.border2}`,
+                        background: selectedTimeframes.includes(tf) ? C.amber + '20' : isLowerTf ? C.red + '08' : C.surf2,
+                        borderRadius: 4,
+                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                        fontSize: 11,
+                        fontFamily: FONT,
+                        fontWeight: selectedTimeframes.includes(tf) ? 600 : 400,
+                        color: isLowerTf ? C.muted : C.text,
+                        opacity: isDisabled ? 0.4 : 1,
+                        transition: 'all .15s',
+                      }}
+                      disabled={isDisabled}
+                    >
+                      {tfDisplayMap[tf] || tf}
+                    </button>
+                  )
+                })}
               </div>
               {selectedTimeframes.length > 0 && (
                 <div
