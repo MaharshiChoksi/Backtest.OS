@@ -182,22 +182,24 @@ export function formatDateRange(startTime, endTime) {
 /**
  * Aggregate OHLCV bars to a higher timeframe
  * E.g., aggregate 1m bars to 5m, 15m, 1h, etc.
+ * 
+ * NOTE: bar.time is in milliseconds, toTimeframeMs is in milliseconds
  */
 export function aggregateBars(bars, fromTimeframeMs, toTimeframeMs) {
   if (toTimeframeMs <= fromTimeframeMs) return bars // no aggregation needed
 
-  const ratio = toTimeframeMs / fromTimeframeMs
   const aggregated = []
 
   let currentGroup = []
   let groupStartTime = null
 
   for (const bar of bars) {
-    if (!groupStartTime) {
-      groupStartTime = Math.floor(bar.time / (toTimeframeMs / 1000)) * (toTimeframeMs / 1000)
-    }
+    // Group bars by their timeframe boundary (bar.time and toTimeframeMs are both in ms)
+    const barGroupTime = Math.floor(bar.time / toTimeframeMs) * toTimeframeMs
 
-    const barGroupTime = Math.floor(bar.time / (toTimeframeMs / 1000)) * (toTimeframeMs / 1000)
+    if (groupStartTime === null) {
+      groupStartTime = barGroupTime
+    }
 
     if (barGroupTime === groupStartTime) {
       currentGroup.push(bar)
@@ -230,7 +232,7 @@ function createAggregatedBar(bars, time) {
   const volumes = bars.map((b) => b.volume)
 
   return {
-    time: Math.floor(time),
+    time: Math.floor(time),  // Keep in milliseconds
     open: opens[0],
     high: Math.max(...highs),
     low: Math.min(...lows),

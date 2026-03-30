@@ -1,5 +1,59 @@
 import { tableFromIPC } from 'apache-arrow'
 
+// ═══════════════════════════════════════════════════════════════════
+// WEB WORKER PARSER - Runs parsing in background thread
+// ═══════════════════════════════════════════════════════════════════
+
+let _worker = null
+
+/**
+ * Get or create the CSV parser worker
+ */
+function getWorker() {
+  if (!_worker) {
+    _worker = new Worker('/csvParserWorker.js')
+  }
+  return _worker
+}
+
+/**
+ * Parse CSV text using Web Worker (non-blocking)
+ * Returns a promise that resolves with progress updates
+ */
+export function parseCSVWithWorker(text, options = {}) {
+  return new Promise((resolve, reject) => {
+    const worker = getWorker()
+    const id = Date.now()
+    
+    const handleMessage = (e) => {
+      const { type, id: msgId, ...data } = e.data
+      
+      if (type === 'progress' || type === 'phase') {
+        if (options.onProgress) {
+          options.onProgress(data)
+        }
+      } else if (type === 'complete') {
+        if (data.id === id) {
+          worker.removeEventListener('message', handleMessage)
+          resolve(data.result)
+        }
+      } else if (type === 'error') {
+        if (data.id === id) {
+          worker.removeEventListener('message', handleMessage)
+          reject(new Error(data.message))
+        }
+      }
+    }
+    
+    worker.addEventListener('message', handleMessage)
+    worker.postMessage({ type: 'parse', id, payload: { text, options } })
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LEGACY PARSERS (still used for small files or fallback)
+// ═══════════════════════════════════════════════════════════════════
+
 export function parseDelimited(text) {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().split('\n').filter(Boolean)
   if (lines.length < 2) return null
@@ -51,44 +105,97 @@ export async function parseParquet(arrayBuffer) {
 
 /**
  * Cache parsed data efficiently for next session using IndexedDB.
- * Stores as compressed JSON for fast reload.
+ * Supports both JSON (for metadata) and binary Float64Array (for bars).
+ * Binary storage is ~10-50x faster than JSON for large datasets.
  */
-export async function cacheData(fileName, headers, rows) {
+export async function cacheData(fileName, headers, rows, bars, options = {}) {
+  const { useBinary = true, onProgress } = options
+  
   try {
     // Open IndexedDB
     const db = await new Promise((resolve, reject) => {
-      const req = indexedDB.open('BacktestDB', 1)
+      const req = indexedDB.open('BacktestDB', 2)
       req.onupgradeneeded = (e) => {
-        const store = e.target.result.createObjectStore('data', { keyPath: 'name' })
-        store.createIndex('timestamp', 'timestamp', { unique: false })
+        const db = e.target.result
+        // Create metadata store
+        if (!db.objectStoreNames.contains('metadata')) {
+          db.createObjectStore('metadata', { keyPath: 'name' })
+        }
+        // Create binary data store (for large bar data)
+        if (!db.objectStoreNames.contains('bars')) {
+          db.createObjectStore('bars', { keyPath: 'name' })
+        }
       }
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
     })
 
-    // Compress and store
-    const data = { headers, rows, timestamp: Date.now() }
-    const json = JSON.stringify(data)
+    const timestamp = Date.now()
     
-    // Use native compression via Blob (built-in browser support)
-    const blob = new Blob([json], { type: 'application/json' })
+    // Store metadata (headers, row count, etc.)
+    const metadata = { 
+      name: fileName, 
+      headers, 
+      rowCount: rows.length,
+      timestamp,
+      useBinary: useBinary && bars && bars.length > 0
+    }
     
-    // Store in IndexedDB
-    const tx = db.transaction('data', 'readwrite')
-    const store = tx.objectStore('data')
+    const tx = db.transaction(['metadata', 'bars'], 'readwrite')
+    const metaStore = tx.objectStore('metadata')
     
     await new Promise((resolve, reject) => {
-      const req = store.put({
-        name: fileName,
-        blob: blob,
-        timestamp: Date.now(),
-        size: blob.size
-      })
+      const req = metaStore.put(metadata)
       req.onsuccess = resolve
       req.onerror = reject
     })
 
-    console.log(`📦 Cached ${rows.length} rows for ${fileName} (${(blob.size / 1024).toFixed(2)} KB)`)
+    // Store bars (either as binary or JSON)
+    if (useBinary && bars && bars.length > 0) {
+      if (onProgress) onProgress({ phase: 'caching', message: 'Storing binary data...' })
+      
+      // Convert bars to Float64Array for efficient storage
+      const binaryData = new Float64Array(bars.length * 6)
+      for (let i = 0; i < bars.length; i++) {
+        const b = bars[i]
+        const idx = i * 6
+        binaryData[idx] = b.time
+        binaryData[idx + 1] = b.open
+        binaryData[idx + 2] = b.high
+        binaryData[idx + 3] = b.low
+        binaryData[idx + 4] = b.close
+        binaryData[idx + 5] = b.volume
+      }
+      
+      const barStore = tx.objectStore('bars')
+      await new Promise((resolve, reject) => {
+        const req = barStore.put({
+          name: fileName,
+          data: binaryData.buffer,  // ArrayBuffer
+          barCount: bars.length,
+          timestamp
+        })
+        req.onsuccess = resolve
+        req.onerror = reject
+      })
+      
+      console.log(`📦 Cached ${bars.length} bars for ${fileName} (binary: ${(binaryData.byteLength / 1024).toFixed(2)} KB)`)
+    } else {
+      // Fallback to JSON
+      const barStore = tx.objectStore('bars')
+      await new Promise((resolve, reject) => {
+        const req = barStore.put({
+          name: fileName,
+          data: JSON.stringify(bars),
+          barCount: bars.length,
+          timestamp
+        })
+        req.onsuccess = resolve
+        req.onerror = reject
+      })
+      
+      console.log(`📦 Cached ${bars?.length || 0} bars for ${fileName} (JSON)`)
+    }
   } catch (error) {
     console.error('Cache error:', error)
   }
@@ -96,34 +203,102 @@ export async function cacheData(fileName, headers, rows) {
 
 /**
  * Load cached data from IndexedDB.
+ * Automatically uses binary format if available.
  */
 export async function loadCachedData(fileName) {
   try {
     const db = await new Promise((resolve, reject) => {
-      const req = indexedDB.open('BacktestDB', 1)
+      const req = indexedDB.open('BacktestDB', 2)
       req.onupgradeneeded = (e) => {
-        e.target.result.createObjectStore('data', { keyPath: 'name' })
+        const db = e.target.result
+        if (!db.objectStoreNames.contains('metadata')) {
+          db.createObjectStore('metadata', { keyPath: 'name' })
+        }
+        if (!db.objectStoreNames.contains('bars')) {
+          db.createObjectStore('bars', { keyPath: 'name' })
+        }
       }
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
     })
 
-    const tx = db.transaction('data', 'readonly')
-    const store = tx.objectStore('data')
+    // Load metadata
+    const tx = db.transaction(['metadata', 'bars'], 'readonly')
+    const metaStore = tx.objectStore('metadata')
     
-    const cached = await new Promise((resolve, reject) => {
-      const req = store.get(fileName)
+    const metadata = await new Promise((resolve, reject) => {
+      const req = metaStore.get(fileName)
       req.onsuccess = () => resolve(req.result)
       req.onerror = reject
     })
 
-    if (!cached || !cached.blob) return null
+    if (!metadata) return null
 
-    const text = await cached.blob.text()
-    return JSON.parse(text)
+    // Load bars
+    const barStore = tx.objectStore('bars')
+    const barData = await new Promise((resolve, reject) => {
+      const req = barStore.get(fileName)
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = reject
+    })
+
+    if (!barData) return null
+
+    let bars
+    if (metadata.useBinary && barData.data instanceof ArrayBuffer) {
+      // Decode binary Float64Array
+      const arr = new Float64Array(barData.data)
+      bars = []
+      for (let i = 0; i < arr.length; i += 6) {
+        bars.push({
+          time: arr[i],
+          open: arr[i + 1],
+          high: arr[i + 2],
+          low: arr[i + 3],
+          close: arr[i + 4],
+          volume: arr[i + 5]
+        })
+      }
+    } else {
+      // Parse JSON
+      bars = typeof barData.data === 'string' ? JSON.parse(barData.data) : barData.data
+    }
+
+    return {
+      headers: metadata.headers,
+      bars,
+      rowCount: metadata.rowCount
+    }
   } catch (error) {
     console.error('Load cache error:', error)
     return null
+  }
+}
+
+/**
+ * Clear all cached data
+ */
+export async function clearCache(fileName = null) {
+  try {
+    const db = await new Promise((resolve, reject) => {
+      const req = indexedDB.open('BacktestDB', 2)
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => reject(req.error)
+    })
+
+    const tx = db.transaction(['metadata', 'bars'], 'readwrite')
+    
+    if (fileName) {
+      await tx.objectStore('metadata').delete(fileName)
+      await tx.objectStore('bars').delete(fileName)
+      console.log(`🗑️ Cleared cache for ${fileName}`)
+    } else {
+      await tx.objectStore('metadata').clear()
+      await tx.objectStore('bars').clear()
+      console.log(`🗑️ Cleared all cache`)
+    }
+  } catch (error) {
+    console.error('Clear cache error:', error)
   }
 }
 

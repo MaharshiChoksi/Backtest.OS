@@ -265,7 +265,12 @@ Everything stays on your machine. Your data never leaves your browser. We cache 
 
 ## Version History
 
-**V2.0** (Current)
+**V2.5** (Current)
+- Multi Timeframe data aggregation
+- Improved response time for simulation.
+- Detecting and preventing unknown selection of timeframe.
+
+**V2.0** 
 - Multi-timeframe support (run 1, 2, or 3 charts together)
 - Fixed all the timestamp precision issues
 - Charts all sync up during playback

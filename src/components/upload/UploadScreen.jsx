@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useTheme } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
 import { FONT } from '../../constants'
-import { parseDelimited, parseParquet, cacheData, loadCachedData, detectMapping, rowToBar } from '../../utils/parser'
+import { parseDelimited, parseParquet, parseCSVWithWorker, cacheData, loadCachedData, detectMapping, rowToBar } from '../../utils/parser'
 import { generateSampleBars } from '../../utils/format'
 import { searchSymbol, getAccountDefaults } from '../../utils/symbolUtils'
 import { detectTimeframe, aggregateBars, getTimeframeMs } from '../../utils/tradingUtils'
@@ -14,6 +14,8 @@ const STEPS = {
   SYMBOL: 'symbol',
   ACCOUNT: 'account',
 }
+
+const MAX_BARS = 1_000_000  // Maximum bars to load (1 million) for performance with 3 multi-timeframe charts
 
 export function UploadScreen() {
   const C = useTheme()
@@ -30,6 +32,9 @@ export function UploadScreen() {
   const [error, setError] = useState('')
   const [processing, setProcessing] = useState(false)
   const [status, setStatus] = useState('')
+  const [progress, setProgress] = useState(0)  // Progress percentage (0-100)
+  const [barLimitReached, setBarLimitReached] = useState(false)  // Track if we hit the 1M bar limit
+  const [workerResult, setWorkerResult] = useState(null)  // Store worker parsing result for later use
   const fileRef = useRef()
 
   // Symbol step state
@@ -70,27 +75,81 @@ export function UploadScreen() {
     setFileName(file.name)
     setError('')
     setProcessing(true)
+    setBarLimitReached(false)  // Reset bar limit flag for new file
+    setStatus('Loading file...')
+    setProgress(5)
 
     const isParquet = file.name.toLowerCase().endsWith('.parquet')
     const reader = new FileReader()
 
     reader.onload = async (e) => {
-      setProcessing(false)
       let result
 
       if (isParquet) {
+        setStatus('Parsing Parquet file...')
+        setProgress(20)
         result = await parseParquet(e.target.result)
+        setProgress(60)
       } else {
-        result = parseDelimited(e.target.result)
+        const text = e.target.result
+        const rowEstimate = text.split('\n').length
+        
+        // Use Web Worker for large files (>50k rows) to avoid UI lag
+        if (rowEstimate > 50000) {
+          setStatus('Parsing CSV (background processing)')
+          setProgress(15)
+          try {
+            const parseResult = await parseCSVWithWorker(text, {
+              onProgress: (p) => {
+                // Map worker progress (0-100) to overall progress (15-75%)
+                const mappedProgress = 15 + Math.round((p.percent || 0) * 0.6)
+                setProgress(mappedProgress)
+                setStatus(`${p.message} ${p.percent}%`)
+              }
+            })
+            setProgress(75)
+            setStatus('Finalizing data...')
+            result = { headers: parseResult.headers, rows: [] }  // Only need headers for mapping
+            // Store bars for later use
+            if (parseResult.bars) {
+              bars.current = parseResult.bars
+            }
+            // Store worker result for later use
+            setWorkerResult(parseResult)
+          } catch (err) {
+            console.error('Worker parsing failed, falling back to main thread:', err)
+            setStatus('Falling back to standard parsing...')
+            result = parseDelimited(text)
+            setProgress(60)
+          }
+        } else {
+          setStatus('Parsing CSV...')
+          setProgress(20)
+          result = parseDelimited(text)
+          setProgress(60)
+        }
       }
 
+      setProgress(80)
+      setStatus('Preparing columns...')
+      
       if (!result) {
+        setProcessing(false)
+        setProgress(0)
+        setStatus('')
         setError(`Could not parse file — please check the format (${isParquet ? 'Parquet' : 'CSV'}).`)
         return
       }
-      setParsed(result)
-      setMapping(detectMapping(result.headers))
-      setStep(STEPS.MAPPING)
+      
+      setProgress(100)
+      setTimeout(() => {
+        setParsed(result)
+        setMapping(detectMapping(result.headers))
+        setProcessing(false)
+        setProgress(0)
+        setStatus('')
+        setStep(STEPS.MAPPING)
+      }, 200)  // Brief delay to show 100% before transitioning
     }
 
     if (isParquet) {
@@ -108,27 +167,50 @@ export function UploadScreen() {
 
   const handleValidateMapping = async () => {
     try {
-      setStatus('✓ Validating data…')
+      setStatus('Validating data...')
+      setProgress(10)
       setError('')
       setProcessing(true)
 
-      const validatedBars = parsed.rows
-        .map((r) => rowToBar(r, mapping))
-        .filter(Boolean)
-        .sort((a, b) => a.time - b.time)
-      const unique = validatedBars.filter((b, i) => i === 0 || b.time !== validatedBars[i - 1].time)
+      let validatedBars
+      
+      // If we have pre-parsed bars from Web Worker, filter them by the mapping
+      if (workerResult && workerResult.bars && workerResult.bars.length > 0) {
+        setStatus('Filtering data...')
+        setProgress(30)
+        // Bars are already parsed, just sort and dedupe
+        validatedBars = [...workerResult.bars]
+          .sort((a, b) => a.time - b.time)
+          .filter((b, i, arr) => i === 0 || b.time !== arr[i - 1].time)
+        setProgress(50)
+      } else {
+        // Fall back to main-thread parsing
+        setStatus('Converting rows to bars...')
+        setProgress(25)
+        validatedBars = parsed.rows
+          .map((r) => rowToBar(r, mapping))
+          .filter(Boolean)
+          .sort((a, b) => a.time - b.time)
+        setProgress(40)
+        const unique = validatedBars.filter((b, i) => i === 0 || b.time !== validatedBars[i - 1].time)
+        validatedBars = unique
+        setProgress(50)
+      }
 
-      if (unique.length < 20) {
+      if (validatedBars.length < 20) {
         setError('Too few valid bars — check column mapping.')
         setStatus('')
+        setProgress(0)
         setProcessing(false)
         return
       }
 
+      setStatus('Validating time intervals...')
+      setProgress(55)
       // Validate minimum 1-minute bar interval (reject tick data or data closer than 60 seconds)
       let minInterval = Infinity
-      for (let i = 1; i < unique.length; i++) {
-        const interval = unique[i].time - unique[i - 1].time
+      for (let i = 1; i < validatedBars.length; i++) {
+        const interval = validatedBars[i].time - validatedBars[i - 1].time
         minInterval = Math.min(minInterval, interval)
       }
 
@@ -136,20 +218,40 @@ export function UploadScreen() {
       if (minInterval < MIN_INTERVAL_MS) {
         setError(`Data resolution is too high (${(minInterval / 1000).toFixed(0)}s between bars). Minimum supported interval is 1 minute. Tick data is incompatible.`)
         setStatus('')
+        setProgress(0)
         setProcessing(false)
         return
       }
 
-      bars.current = unique
-      setStatus('💾 Caching data…')
+      setProgress(65)
+      // Enforce bar limit for performance (loading 3 multi-timeframe charts simultaneously)
+      let finalBars = validatedBars
+      let hitBarLimit = false
+      if (validatedBars.length > MAX_BARS) {
+        finalBars = validatedBars.slice(0, MAX_BARS)
+        hitBarLimit = true
+        setBarLimitReached(true)
+      }
+
+      bars.current = finalBars
+      setStatus('Caching data...')
+      setProgress(75)
       
-      await cacheData(fileName, parsed.headers, parsed.rows)
+      // Cache with binary format for faster reload
+      await cacheData(fileName, parsed.headers, parsed.rows, finalBars, { useBinary: true })
+      setProgress(95)
       
-      setStatus('')
-      setProcessing(false)
-      setStep(STEPS.SYMBOL)
+      setProgress(100)
+      setTimeout(() => {
+        setStatus('')
+        setProgress(0)
+        setProcessing(false)
+        setWorkerResult(null)  // Clear worker result after use
+        setStep(STEPS.SYMBOL)
+      }, 200)
     } catch (err) {
       setStatus('')
+      setProgress(0)
       setProcessing(false)
       setError('Error validating/caching data: ' + err.message)
     }
@@ -284,29 +386,46 @@ export function UploadScreen() {
       const detectedMs = getTimeframeMs(detectedTimeframe)
       const barsMap = {}
       
+      console.log('=== Timeframe Aggregation Debug ===')
+      console.log('Detected timeframe:', detectedTimeframe, '=', detectedMs, 'ms')
+      console.log('Selected timeframes:', selectedTimeframes)
+      console.log('Original bars count:', filteredBars.length)
+      if (filteredBars.length > 0) {
+        console.log('First bar time:', new Date(filteredBars[0].time).toISOString())
+        console.log('Last bar time:', new Date(filteredBars[filteredBars.length - 1].time).toISOString())
+      }
+      
       selectedTimeframes.forEach(tf => {
         const tfMs = getTimeframeMs(tf)
         const displayKey = tfDisplayMap[tf] || tf  // Use display format as key (M1, M5, etc)
-        console.log('Processing timeframe:', tf, 'display:', displayKey, 'ms:', tfMs, 'vs detected:', detectedMs)
+        console.log('---')
+        console.log('Processing timeframe:', tf, '→ display:', displayKey, '=', tfMs, 'ms (detected:', detectedMs, 'ms)')
         
         if (tfMs >= detectedMs) {
           if (tfMs === detectedMs) {
             barsMap[displayKey] = filteredBars
+            console.log('  → Same as detected, using original bars:', barsMap[displayKey].length)
           } else {
+            const beforeCount = filteredBars.length
             barsMap[displayKey] = aggregateBars(filteredBars, detectedMs, tfMs)
+            console.log('  → Aggregated from', beforeCount, 'bars to', barsMap[displayKey].length, 'bars (ratio:', (beforeCount / barsMap[displayKey].length).toFixed(1), ': 1)')
+            if (barsMap[displayKey].length > 0) {
+              console.log('  → First aggregated bar:', new Date(barsMap[displayKey][0].time).toISOString(), 'O:', barsMap[displayKey][0].open, 'H:', barsMap[displayKey][0].high, 'L:', barsMap[displayKey][0].low, 'C:', barsMap[displayKey][0].close)
+            }
           }
         } else {
           // Can't downsample - just use original (user should load higher resolution data)
           barsMap[displayKey] = filteredBars
+          console.log('  → Lower than detected, using original bars:', barsMap[displayKey].length)
         }
-        console.log('  →', displayKey, 'bars:', barsMap[displayKey].length)
       })
+      console.log('=== End Aggregation Debug ===')
 
       console.log('📦 Final barsMap:', Object.keys(barsMap).map(k => `${k}:${barsMap[k].length}`).join(', '))
       
-      setStatus('💾 Caching data...')
+      setStatus('💾 Caching data (binary format)...')
       if (parsed?.headers && parsed?.rows) {
-        await cacheData(fileName, parsed.headers, parsed.rows)
+        await cacheData(fileName, parsed.headers, parsed.rows, bars.current, { useBinary: true })
       }
 
       setStatus('🚀 Loading session...')
@@ -343,6 +462,18 @@ export function UploadScreen() {
         overflow: 'hidden',
       }}
     >
+      {/* Global styles for animations */}
+      <style>{`
+        @keyframes progressPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.95); }
+        }
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+      `}</style>
+      
       {/* Brand */}
       <div style={{ textAlign: 'center', marginBottom: 48 }}>
         <div style={{ fontSize: 17, color: C.muted, letterSpacing: '5px', textTransform: 'uppercase', marginBottom: 8 }}>
@@ -391,7 +522,7 @@ export function UploadScreen() {
       {step === STEPS.UPLOAD && !parsed && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
           <div
-            onClick={() => fileRef.current.click()}
+            onClick={() => !processing && fileRef.current.click()}
             onDragOver={(e) => {
               e.preventDefault()
               setDrag(true)
@@ -400,22 +531,86 @@ export function UploadScreen() {
             onDrop={handleDrop}
             style={{
               width: '100%',
-              height: '100%',
+              maxWidth: 500,
+              height: processing ? 'auto' : 200,
+              minHeight: 200,
               border: `1.5px dashed ${drag ? C.amber : C.border2}`,
               borderRadius: 12,
-              padding: '20px 0 20px 0',
+              padding: processing ? '40px 40px' : '20px 0',
               gap: '5px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'all .2s',
+              cursor: processing ? 'default' : 'pointer',
+              transition: 'all .3s',
               background: drag ? C.amber + '08' : C.surf,
             }}
           >
             {processing ? (
-              <div style={{ color: C.muted, fontSize: 12 }}>Parsing file…</div>
+              <div style={{ width: '100%', maxWidth: 350, textAlign: 'center' }}>
+                {/* File name */}
+                <div style={{ 
+                  color: C.text, 
+                  fontSize: 13, 
+                  marginBottom: 16,
+                  fontWeight: 500,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: 350
+                }}>
+                  {fileName}
+                </div>
+                
+                {/* Progress bar */}
+                <div style={{
+                  width: '100%',
+                  height: 8,
+                  background: C.surf2,
+                  borderRadius: 4,
+                  overflow: 'hidden',
+                  marginBottom: 12
+                }}>
+                  <div style={{
+                    width: `${progress}%`,
+                    height: '100%',
+                    background: `linear-gradient(90deg, ${C.amber}CC, ${C.amber})`,
+                    borderRadius: 4,
+                    transition: 'width 0.3s ease-out',
+                    boxShadow: `0 0 10px ${C.amber}40`
+                  }} />
+                </div>
+                
+                {/* Progress percentage */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 8
+                }}>
+                  <span style={{ color: C.amber, fontSize: 11, fontWeight: 600 }}>
+                    {progress}%
+                  </span>
+                  <span style={{ color: C.muted, fontSize: 11 }}>
+                    {status || 'Processing...'}
+                  </span>
+                </div>
+                
+                {/* Animated indicator */}
+                <div style={{ 
+                  color: C.amber, 
+                  fontSize: 12,
+                  marginTop: 8
+                }}>
+                  <span style={{ 
+                    animation: 'progressPulse 1.5s ease-in-out infinite',
+                    display: 'inline-block'
+                  }}>
+                    ● Processing
+                  </span>
+                </div>
+              </div>
             ) : (
               <>
                 <div style={{ color: drag ? C.amber : C.text, fontSize: 14, marginBottom: 8, padding: '10px' }}>
@@ -491,6 +686,7 @@ export function UploadScreen() {
                 setParsed(null)
                 setFileName('')
                 setError('')
+                setBarLimitReached(false)
                 setStep(STEPS.UPLOAD)
               }}
               style={{
@@ -895,9 +1091,26 @@ export function UploadScreen() {
             <div style={{ marginBottom: 24 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 12 }}>Backtest Period</div>
               {availableDateRange && (
-                <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>
-                  Available: {availableDateRange.startTime.toLocaleDateString()} to {availableDateRange.endTime.toLocaleDateString()} ({bars.current.length.toLocaleString()} bars)
-                </div>
+                <>
+                  <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>
+                    Available: {availableDateRange.startTime.toLocaleDateString()} to {availableDateRange.endTime.toLocaleDateString()} ({bars.current.length.toLocaleString()} bars)
+                  </div>
+                  {barLimitReached && (
+                    <div
+                      style={{
+                        background: C.red + '10',
+                        border: `1px solid ${C.red}40`,
+                        borderRadius: 4,
+                        padding: '8px 12px',
+                        marginBottom: 12,
+                        fontSize: 10,
+                        color: C.red,
+                      }}
+                    >
+                      ⚠ Maximum capacity reached: Only first {MAX_BARS.toLocaleString()} bars loaded (performance limit for 3 multi-timeframe charts). Consider using a smaller date range or higher timeframe data.
+                    </div>
+                  )}
+                </>
               )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>

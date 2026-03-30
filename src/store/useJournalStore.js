@@ -99,10 +99,12 @@ export const useJournalStore = create((set, get) => ({
 
   /**
    * Update journal entry when trade closes
+   * Also recalculates balance for all remaining open trades
    */
   syncClosedTrade: (trade, symbolConfig) => {
     set((s) => {
-      const updated = s.entries.map(e => {
+      // First pass: update the closed trade
+      let updated = s.entries.map(e => {
         if (e.tradeId !== trade.id) return e
 
         if (!symbolConfig) return e
@@ -130,6 +132,51 @@ export const useJournalStore = create((set, get) => ({
           closureReason: trade.closeReason || 'Manual',
         }
       })
+
+      // Second pass: recalculate balance for ALL remaining open trades
+      // Balance formula: starting_balance + deposits - withdrawals + cumulative_closed_pnl
+      
+      // Get deposits and withdrawals from existing entries
+      const deposits = updated.length > 0 ? updated[0].deposits : 0
+      const withdrawals = updated.length > 0 ? updated[0].withdrawals : 0
+      
+      // Calculate total PnL from ALL closed trades (including the one we just closed)
+      const cumulativeClosedPnL = updated
+        .filter(e => e.exitPrice)
+        .reduce((sum, e) => sum + (e.pnlUsd || 0), 0)
+      
+      // Derive starting_balance from an existing entry:
+      // For open entries: balance = starting_balance + deposits - withdrawals (pnl = 0)
+      // For closed entries: balance = starting_balance + deposits - withdrawals + pnl
+      let accountStartingBalance = 0
+      
+      if (updated.length > 0) {
+        // Find an entry to derive starting_balance from
+        const openEntry = updated.find(e => !e.exitPrice)
+        const firstEntry = updated[0]
+        
+        if (openEntry) {
+          // An open entry exists - derive starting_balance from it
+          // openEntry.balance = starting_balance + deposits - withdrawals
+          accountStartingBalance = openEntry.balance - deposits + withdrawals
+        } else if (firstEntry && firstEntry.exitPrice) {
+          // All entries are closed - derive from first closed entry
+          // firstEntry.balance = starting_balance + deposits - withdrawals + firstEntry.pnlUsd
+          accountStartingBalance = firstEntry.balance - deposits + withdrawals - firstEntry.pnlUsd
+        }
+      }
+
+      // Current balance = starting_balance + deposits - withdrawals + cumulative_closed_pnl
+      const currentBalance = accountStartingBalance + deposits - withdrawals + cumulativeClosedPnL
+
+      updated = updated.map(e => {
+        // Update balance for all open trades to reflect current account state
+        if (!e.exitPrice) {
+          return { ...e, balance: currentBalance }
+        }
+        return e
+      })
+
       persist(updated)
       return { entries: updated }
     })

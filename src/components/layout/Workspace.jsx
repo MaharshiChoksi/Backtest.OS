@@ -252,7 +252,7 @@ export function Workspace({ onLoadNew }) {
   
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, fontFamily: '"JetBrains Mono","SF Mono",monospace', color: C.text, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, fontFamily: '"JetBrains Mono","SF Mono",monospace', color: C.text, overflow: 'scroll' }}>
       <Header onLoadNew={onLoadNew} />
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -288,7 +288,9 @@ export function Workspace({ onLoadNew }) {
 
         {/* Right Panel */}
         <DragHandle direction="vertical" onMouseDown={startResizeRight} C={C} />
+        <div style={{ width: rightWidth, flexShrink: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           <RightPanel PanWidth={rightWidth} />
+        </div>
       </div>
 
       <SimBar
