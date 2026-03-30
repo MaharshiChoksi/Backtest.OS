@@ -8,3 +8,5 @@ build/
 *.log
 *.pyc
 data/
+.vercel
+.env*.local
