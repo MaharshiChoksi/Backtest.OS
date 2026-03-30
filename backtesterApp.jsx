@@ -131,11 +131,18 @@ function calcBB(vals, period = 20, stdDev = 2) {
 function guessDecimals(price) { return price < 5 ? 5 : price < 100 ? 4 : price < 1000 ? 2 : 1; }
 function fmt(n, d) { return typeof n === "number" ? n.toFixed(d ?? guessDecimals(n)) : "—"; }
 function fmtPnl(n) { return (n >= 0 ? "+" : "") + n.toFixed(2); }
-function fmtDate(ts) { return new Date(ts * 1000).toISOString().replace("T", " ").slice(0, 16); }
-function fmtShortDate(ts) { return new Date(ts * 1000).toISOString().slice(0, 10); }
+function fmtDate(ts) { 
+  const ms = ts > 1e12 ? ts : ts * 1000
+  return new Date(ms).toISOString().replace("T", " ").slice(0, 16)
+}
+
+function fmtShortDate(ts) { 
+  const ms = ts > 1e12 ? ts : ts * 1000
+  return new Date(ms).toISOString().slice(0, 10)
+}
 
 function generateSampleBars(n = 2000) {
-  const bars = []; let price = 1.08500, time = 1704067200;
+  const bars = []; let price = 1.08500, time = 1704067200000;
   for (let i = 0; i < n; i++) {
     const trend = Math.sin(i / 200) * 0.0003;
     const change = trend + (Math.random() - 0.495) * 0.0018;
@@ -144,7 +151,7 @@ function generateSampleBars(n = 2000) {
     const high = +(Math.max(open, close) + range * Math.random()).toFixed(5);
     const low = +(Math.min(open, close) - range * Math.random()).toFixed(5);
     bars.push({ time, open, high, low, close, volume: Math.floor(Math.random() * 8000 + 500) });
-    price = close; time += 3600;
+    price = close; time += 3600000;
   }
   return bars;
 }
