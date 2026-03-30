@@ -1,6 +1,6 @@
 # Backtesting Engine
 
-## What is This?
+## ❓What is This?
 
 Ever wanted to test your trading ideas on historical data without risking real money? That's exactly what this project does. It's a browser-based backtesting platform that lets you replay market data, simulate trades, and see exactly how your strategy would've performed.
 
@@ -10,27 +10,27 @@ Think of it as a practice range for traders—load some historical price data, s
 
 ---
 
-## What Can You Actually Do With It?
+## 🤔 What Can You Actually Do With It?
 
-### See Multiple Timeframes at Once
+### 🗠 See Multiple Timeframes at Once
 Analyze 1, 2, or 3 different timeframes simultaneously in a smart layout. Watch how your entries line up across daily, hourly, and minute charts—all updating together in real-time during playback. Each chart calculates its own technical indicators independently, giving you the full picture without jumping between tabs.
 
-### Play Back Historical Data Like a Video
+### 🔢 Play Back Historical Data
 Load your CSV or Parquet data and replay it bar by bar. Play at normal speed, pause to analyze, jump ahead, or even go in slow-motion (0.5x) to catch exactly when your trade triggers. Keyboard shortcuts keep you hands-free (spacebar to play/pause, arrow keys to step through bars).
 
-### Enter and Track Trades
+### ⌖ Enter and Track Trades
 Click to enter trades with entry price, stop loss, and take profit levels. The platform shows you exactly where these levels sit on the chart with clean visual markers. If price hits your stop loss or take profit, the trade closes automatically—just like real trading. Your P&L updates in real-time as you play through data.
 
-### Keep a Trade Journal  
+### 📔 Keep a Trade Journal  
 Every trade gets logged in an automatically-syncing journal. Edit your stop losses or profit targets during the replay and watch the journal update instantly. The app calculates your profit/loss, win/loss ratio, and running account balance. Export everything to Excel for deeper analysis or just clear it and start over.
 
-### Accurate, Realistic Calculations
+### 🖩 Dynamic Calculations
 The math is precise: P&L accounts for spread, commissions, lot sizes, and the pips you win or lose. Your account balance tracks through every trade, so you see exactly how your strategy compounds over time.
 
 ### Technical Indicators On Demand
 See EMA-20, EMA-50, Bollinger Bands, and RSI-14 on your charts. Toggle them on and off independently to keep things clean or get overwhelming detail—your choice.
 
-### Light & Dark Themes
+### ☀️ / 🔅 Light & Dark Themes
 Trading late night? Dark mode is there. Prefer daylight mode? Switch instantly. Your preference sticks around between sessions.
 
 ---
@@ -41,7 +41,7 @@ This is built with modern web technologies that make it fast and responsive:
 
 - **React**: The JavaScript framework powering the UI
 - **Vite**: Super-fast build and development tool
-- **Zustand**: Dead-simple state management (we split logic into 5 focused stores)
+- **Zustand**: Dead-simple state management (I've split logic into 5 focused stores)
 - **TradingView Lightweight Charts**: The charting library that renders everything smoothly
 - **IndexedDB**: Browser-level database for caching data so you don't have to reload it every time
 - **LocalStorage**: Saves your trade journal between sessions
@@ -151,7 +151,10 @@ The app accepts CSV files and Parquet files. It's smart about figuring out what 
 
 ### What the Data Looks Like
 You need columns for: time (dates), open, high, low, close, and volume. That's it.
-Here user your file can have tab seperated values for **date** and **time** seeprately as well and our parser will auto merge it. 
+
+> [!NOTE]  
+> Here user can upload file with **date** and **time** columns seperately as well and our parser will auto detect it. 
+
 Example:
 ```
 date,time,open,high,low,close,volume
@@ -160,7 +163,7 @@ date,time,open,high,low,close,volume
 ```
 
 ### Fair Warning on Large Datasets
-I Recommend loading upto 1 million bars per chart. If you're running 3 charts, that's 4.5 million total bars. It'll work, but don't go crazy—your browser still has limits. The system will warn you if you're pushing it.
+I Recommend loading upto 1.25 million bars per chart.. It'll work, but don't go crazy—your browser still has limits.
 
 ---
 
@@ -202,7 +205,7 @@ The journal keeps records of every trade: entry time, price, size, P&L, whether 
 
 ## What's Next?
 
-Down the road, we're thinking about adding:
+Down the road, I will be adding:
 - More customizable indicators (pick your own periods for moving averages, etc.)
 - Session boxes (mark time zones and session ranges on your charts)
 - Support for backtesting multiple symbols at once
@@ -216,14 +219,14 @@ But honestly, the current version does what most traders need right now.
 
 The app is built to be fast. The simulation engine runs every 16 milliseconds, which means you can replay data at 50x speed smoothly without the UI locking up. We're using some tricks like ref-based updates and lazy calculations to keep things snappy even with massive datasets.
 
-If you're running typical trading data (a few hundred thousand bars), you won't notice any lag. Even at 1.5 million bars per chart, it stays responsive.
+If you're running typical trading data (a few hundred thousand bars), you won't notice any lag. Even at 1.25 million bars per chart, it stays responsive.
 
 ---
 
 ## 🐛 Known Limitations
 
 - Can't display more than 3 charts at once (the rendering would get too heavy)
-- 1 million bars per chart is the practical limit before things slow down
+- 1.25 million bars (1M bars Recommended ~ Approx 2 years data @ 1Min TF)
 - Right now you're working with one symbol at a time
 - You have to pick all your timeframes upfront—you can't add a new one mid-backtest
 
@@ -232,19 +235,6 @@ If you're running typical trading data (a few hundred thousand bars), you won't 
 ## Privacy & Data
 
 Everything stays on your machine. Your data never leaves your browser. We cache things locally so reopening the app is fast, and your trade journal is saved in browser storage so your work sticks around. You can clear the cache if you want a fresh start, and there's a button to wipe the journal anytime.
-
----
-
-## Notes for Developers
-
-The codebase is organized to be pretty straightforward:
-
-- **State is centralized** using Zustand stores (separate store for trades, journal, simulation, etc.)
-- **The simulation engine** is its own hook that handles all the bar-by-bar replay logic
-- **Components are divided by feature**, not by technical layers
-- **Performance tricks used**: We use refs to avoid re-rendering during fast playback, and calculations are memoized to avoid unnecessary work
-
-If you want to dig into the code or contribute improvements, start with the hooks and stores—that's where the logic lives. Components are mostly just rendering what the stores tell them to show.
 
 ---
 
@@ -270,13 +260,11 @@ If you want to dig into the code or contribute improvements, start with the hook
 ---
 
 ## Future Ideas
-
-If we keep building on this:
-- Let traders customize which indicators they see and at what settings
-- Add more built-in indicators beyond the current EMA-20, EMA-50, Bollinger Bands, and RSI
+- Let traders customize which indicators they see with specific parameters
+- Add more built-in indicators beyond the current EMA-20, EMA-50, and RSI
 - Support backtesting across multiple symbols at once
 - Create better performance reporting and analytics dashboards
-- Build some basic strategy optimization tools
+- 
 
 Right now though, the foundation is solid and does everything a trader needs for manual backtesting.
 
@@ -286,7 +274,7 @@ Right now though, the foundation is solid and does everything a trader needs for
 
 Found a bug? Want to add a feature? Great! Here's what helps:
 1. Test your changes thoroughly
-2. Follow the existing code patterns (we use Zustand for state and React hooks for logic)
+2. Follow the existing code patterns (I've use Zustand for state and React hooks for logic)
 3. Don't forget to add error handling if you're adding new features
 4. Update the README if you add something significant
 
@@ -298,4 +286,4 @@ Found a bug? Want to add a feature? Great! Here's what helps:
 
 **Project Lead**: [@maharshichoksi](https://github.com/MaharshiChokski)
 
-**AI Assistance**: GitHub Copilot helped with architecture design, the simulation engine optimization, and documentation. 
+**AI Assistance**: GitHub Copilot helped with documentation, architecture design, minor optimization on engine related to performance. 
