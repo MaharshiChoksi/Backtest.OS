@@ -13,6 +13,7 @@ const SESSION_OPTIONS = ['LONDON', 'NEWYORK', 'TOKYO', 'SYDNEY']
 const REGIME_OPTIONS = ['BULLCONT' ,'BULLREV', 'BEARCONT','BEARREV', 'NOISE']
 const STRATEGY_OPTIONS = ['INDICES-SETUP-A-REVERSAL', 'INDICES-SETUP-B-CONTINUATION', 'COMMODITY-AMDX', 'CURRENCY-REGIME & TREND CONTINUATION']
 const TF_OPTIONS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
+const SYMBOLS = ["EURUSD", "USDJPY", "GBPUSD", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD", "EURGBP", "EURJPY", "AUDCHF", "XAUUSD", "XAGUSD", "BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD", "DOGEUSD", "XTIUSD", "SP500 US500 SPX500", "USTECH US100 NDX100", "US30 DJI30 DJIA30"]
 
 export function JournalTab() {
   const C         = useTheme()
@@ -193,7 +194,7 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
     // Trade Entry Details
     { key: 'entryDate', label: 'ENTRY DATE', width: 100, editable: false },
     { key: 'entryTime', label: 'ENTRY TIME', width: 90, editable: false },
-    { key: 'pair', label: 'PAIR', width: 80, editable: true, type: 'dropdown', options: ['AUDUSD', 'EURUSD', 'GBPUSD', 'USDJPY'] },
+    { key: 'pair', label: 'PAIR', width: 80, editable: true, type: 'dropdown', options: SYMBOLS },
     { key: 'direction', label: 'DIRECTION', width: 80, editable: true, type: 'dropdown', options: ['BUY', 'SELL'] },
     { key: 'entryPrice', label: 'ENTRY PRICE', width: 100, editable: false, format: (v) => v.toFixed(5) },
     { key: 'lotSize', label: 'LOT SIZE', width: 80, editable: true, format: (v) => v.toFixed(2) },
