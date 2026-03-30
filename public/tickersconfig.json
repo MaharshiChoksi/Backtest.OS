@@ -276,7 +276,7 @@
       "margin_required": 2000
     },
     {
-      "symbol": "SP500 US500 SPX500",
+      "symbol": "SP500 / US500 / SPX500",
       "full_name": "S&P 500 Index",
       "base_currency": "USD",
       "quote_currency": "USD",
@@ -291,7 +291,7 @@
       "margin_required": 5000
     },
     {
-      "symbol": "USTECH US100 NDX100",
+      "symbol": "USTECH / US100 / NDX100",
       "full_name": "Nasdaq-100 Index",
       "base_currency": "USD",
       "quote_currency": "USD",
@@ -306,7 +306,7 @@
       "margin_required": 5000
     },
     {
-      "symbol": "US30 DJI30 DJIA30",
+      "symbol": "US30 / DJI30 / DJIA30",
       "full_name": "Dow Jones Industrial Average",
       "base_currency": "USD",
       "quote_currency": "USD",
