@@ -27,6 +27,8 @@ Every trade gets logged in an automatically-syncing journal. Edit your stop loss
 ### 🖩 Dynamic Calculations
 The math is precise: P&L accounts for spread, commissions, lot sizes, and the pips you win or lose. Your account balance tracks through every trade, so you see exactly how your strategy compounds over time.
 
+Every trade's entry price reflects the actual bid/ask spread you'd face in real trading—when you buy, you pay the ask (close + spread). When you sell, you receive the bid (close - spread). Your P&L automatically deducts this realistic spread cost on both entry and exit, so your backtest results match real-world trading conditions.
+
 ### Technical Indicators On Demand
 See EMA-20, EMA-50, Bollinger Bands, and RSI-14 on your charts. Toggle them on and off independently to keep things clean or get overwhelming detail—your choice.
 
@@ -238,12 +240,13 @@ Everything stays on your machine. Your data never leaves your browser. We cache 
 
 ## Version History
 
-**V2.0** (Right now)
+**V2.0** (Current)
 - Multi-timeframe support (run 1, 2, or 3 charts together)
 - Fixed all the timestamp precision issues
 - Charts all sync up during playback
 - Smart responsive layout adapts to how many charts you're viewing
 - P&L calculations are rock-solid with proper lot-size scaling
+- **SpreadBug Fix**: Spread is now correctly applied to entry prices, exit prices, and all P&L calculations across all displays (position cards, header, sidebar, and trade panel). Entry prices reflect actual bid/ask prices traders would pay, and P&L accounts for the cost of spread on both entry and exit.
 
 **V1.5**
 - Added the full trade journal with all the important stats

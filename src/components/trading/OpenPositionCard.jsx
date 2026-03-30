@@ -32,8 +32,13 @@ export function OpenPositionCard({ trade: t }) {
   const fp = useMemo(() => {
     if (!currentBar || !symbolConfig || !accountConfig) return 0
     
-    // Use the proper pip-based PnL calculation
-    const pnl = calculatePnL(t.entry, currentBar.close, t.size, symbolConfig, accountConfig)
+    // Calculate exit price with spread adjustment (what they'd get if closing at market now)
+    const spreadInPips = accountConfig.spread || 0
+    const pipSize = symbolConfig.pip_size || 0.0001
+    const exitPrice = getExitPrice(currentBar.close, t.side, spreadInPips, pipSize)
+    
+    // Use the proper pip-based PnL calculation with spread-adjusted exit
+    const pnl = calculatePnL(t.entry, exitPrice, t.size, symbolConfig, accountConfig)
     
     // For short positions, negate the PnL since entry > currentBar.close means profit
     return t.side === 'buy' ? pnl : -pnl
