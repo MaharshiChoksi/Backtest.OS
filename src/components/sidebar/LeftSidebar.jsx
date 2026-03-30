@@ -42,14 +42,22 @@ function InfoTab() {
 
   const floatingPnl = useMemo(() =>
     openTrades.reduce((s, t) => {
-      if (!currentBar || !symbolConfig) return s
-      const pip_size = symbolConfig.pip_size || 0.0001
-      const pip_value = symbolConfig.pip_value || 10
-      const spreadInPips = accountConfig ? (accountConfig.spread || 0) : 0
-      const exitPrice = getExitPrice(currentBar.close, t.side, spreadInPips, pip_size)
+      if (!currentBar || !symbolConfig || !accountConfig) return s
+      
+      const pipSize = symbolConfig.pip_size || 0.0001
+      const pipValue = symbolConfig.pip_value || 10
+      
+      const spreadInPips = accountConfig.spread || 0
+      const exitPrice = getExitPrice(currentBar.close, t.side, spreadInPips, pipSize)
+      
+      // Use stored fees (already calculated as entry + exit commissions)
+      const totalFees = t.fees || 0
+      
+      // Calculate PnL: priceDiff -> pips -> account for direction -> multiply by pip value and size -> subtract fees
       const priceDiff = exitPrice - t.entry
-      const pips = (priceDiff / pip_size) * (t.side === 'sell' ? -1 : 1)
-      const pnl = pips * pip_value * t.size
+      const pnlPips = (priceDiff / pipSize) * (t.side === 'sell' ? -1 : 1)
+      const pnl = pnlPips * pipValue * t.size - totalFees
+      
       return s + pnl
     }, 0), [openTrades, currentBar, symbolConfig, accountConfig])
 

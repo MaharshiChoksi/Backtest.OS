@@ -13,8 +13,11 @@ function calculateTradePnL(entry, exit, side, size, symbolConfig, accountConfig)
 
   const pipSize = symbolConfig.pip_size || 0.0001
   const pipValue = symbolConfig.pip_value || 10
-  const pipsMove = (exit - entry) / pipSize
-  const rawPnL = pipsMove * pipValue * size
+  
+  // Calculate pips moved: for SELL orders, negate because profit when price falls
+  const priceDiff = exit - entry
+  const pnlPips = (priceDiff / pipSize) * (side === 'sell' ? -1 : 1)
+  const rawPnL = pnlPips * pipValue * size
 
   // Apply commission (scaled by lot size: entry + exit)
   const commission = accountConfig.commission || 0
@@ -76,23 +79,23 @@ export const useTradeStore = create((set, get) => ({
         if (t.sl && bar.low <= t.sl) {
           changed = true
           const pnl = calculateTradePnL(t.entry, t.sl, t.side, t.size, symbolConfig, accountConfig)
-          return { ...t, status: 'closed', closePrice: t.sl, closeTime: bar.time, pnl, closeReason: 'SL' }
+          return { ...t, status: 'closed', closePrice: t.sl, closeTime: bar.time, pnl, closeReason: 'SL', fees: t.fees }
         }
         if (t.tp && bar.high >= t.tp) {
           changed = true
           const pnl = calculateTradePnL(t.entry, t.tp, t.side, t.size, symbolConfig, accountConfig)
-          return { ...t, status: 'closed', closePrice: t.tp, closeTime: bar.time, pnl, closeReason: 'TP' }
+          return { ...t, status: 'closed', closePrice: t.tp, closeTime: bar.time, pnl, closeReason: 'TP', fees: t.fees }
         }
-      } else {
+      } else if (t.side === 'sell') {
         if (t.sl && bar.high >= t.sl) {
           changed = true
           const pnl = calculateTradePnL(t.entry, t.sl, t.side, t.size, symbolConfig, accountConfig)
-          return { ...t, status: 'closed', closePrice: t.sl, closeTime: bar.time, pnl, closeReason: 'SL' }
+          return { ...t, status: 'closed', closePrice: t.sl, closeTime: bar.time, pnl, closeReason: 'SL', fees: t.fees }
         }
         if (t.tp && bar.low <= t.tp) {
           changed = true
           const pnl = calculateTradePnL(t.entry, t.tp, t.side, t.size, symbolConfig, accountConfig)
-          return { ...t, status: 'closed', closePrice: t.tp, closeTime: bar.time, pnl, closeReason: 'TP' }
+          return { ...t, status: 'closed', closePrice: t.tp, closeTime: bar.time, pnl, closeReason: 'TP', fees: t.fees }
         }
       }
       return t

@@ -6,7 +6,7 @@ import { fmtPnl, fmtDate, fmt, guessDecimals } from '../../utils/format'
 import { TabBar, SectionHeader, pill }           from '../ui/atoms'
 import { TradeForm }           from './TradeForm'
 import { OpenPositionCard }    from './OpenPositionCard'
-import { calculatePnL, getExitPrice } from '../../utils/tradingUtils'
+import { getExitPrice } from '../../utils/tradingUtils'
 
 export function RightPanel({PanWidth}) {
   const C     = useTheme()
@@ -37,14 +37,22 @@ function TradesTab() {
     if (!currentBar || !openTrades.length || !symbolConfig || !accountConfig) return 0
     
     return openTrades.reduce((sum, t) => {
+      const pipSize = symbolConfig.pip_size || 0.0001
+      const pipValue = symbolConfig.pip_value || 10
+      
       // Calculate exit price with spread adjustment
       const spreadInPips = accountConfig.spread || 0
-      const pipSize = symbolConfig.pip_size || 0.0001
       const exitPrice = getExitPrice(currentBar.close, t.side, spreadInPips, pipSize)
       
-      // Use proper pip-based PnL calculation
-      const pnl = calculatePnL(t.entry, exitPrice, t.size, symbolConfig, accountConfig)
-      return sum + (t.side === 'buy' ? pnl : -pnl)
+      // Use stored fees (already calculated as entry + exit commissions)
+      const totalFees = t.fees || 0
+      
+      // Calculate PnL: priceDiff -> pips -> account for direction -> multiply by pip value and size -> subtract fees
+      const priceDiff = exitPrice - t.entry
+      const pnlPips = (priceDiff / pipSize) * (t.side === 'sell' ? -1 : 1)
+      const pnl = (pnlPips * pipValue * t.size) - totalFees
+      
+      return sum + pnl
     }, 0)
   }, [openTrades, currentBar, symbolConfig, accountConfig])
 

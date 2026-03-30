@@ -47,10 +47,13 @@ export function TradeForm() {
 
   const handleOpen = () => {
     if (!currentBar || !entryPrice) return
+    const tradeSize = parseFloat(size) || 0.1
+    const fees = tradeSize * (accountConfig?.commission || 0) * 2 // entry + exit commissions
     openTrade({
       side,
-      size:     parseFloat(size) || 0.1,
+      size:     tradeSize,
       entry:    entryPrice,
+      fees:     fees,
       sl:       parseFloat(sl) || null,
       tp:       parseFloat(tp) || null,
       openTime: currentBar.time,

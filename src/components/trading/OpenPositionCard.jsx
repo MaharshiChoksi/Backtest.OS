@@ -6,7 +6,6 @@ import { getDecimalPlaces, getExitPrice } from '../../utils/tradingUtils'
 import { FONT }          from '../../constants'
 import { fmt, fmtPnl, fmtDate } from '../../utils/format'
 import { mkInp, mkLabel } from '../ui/atoms'
-import { calculatePnL } from '../../utils/tradingUtils'
 /**
  * Renders a single open position card.
  * Reads current bar from sim store to calculate live floating P&L.
@@ -28,21 +27,27 @@ export function OpenPositionCard({ trade: t }) {
     ? getDecimalPlaces(symbolConfig.tick_size || symbolConfig.pip_size || 0.0001)
     : 4;
 
-  // Calculate floating PnL using proper pip-based calculation
+  // Calculate floating PnL using journal's correct logic with stored fees
   const fp = useMemo(() => {
     if (!currentBar || !symbolConfig || !accountConfig) return 0
     
+    const pipSize = symbolConfig.pip_size || 0.0001
+    const pipValue = symbolConfig.pip_value || 10
+    
     // Calculate exit price with spread adjustment (what they'd get if closing at market now)
     const spreadInPips = accountConfig.spread || 0
-    const pipSize = symbolConfig.pip_size || 0.0001
     const exitPrice = getExitPrice(currentBar.close, t.side, spreadInPips, pipSize)
     
-    // Use the proper pip-based PnL calculation with spread-adjusted exit
-    const pnl = calculatePnL(t.entry, exitPrice, t.size, symbolConfig, accountConfig)
+    // Use stored fees (already calculated as entry + exit commissions)
+    const totalFees = t.fees || 0
     
-    // For short positions, negate the PnL since entry > currentBar.close means profit
-    return t.side === 'buy' ? pnl : -pnl
-  }, [currentBar, t.entry, t.size, t.side, symbolConfig, accountConfig])
+    // Calculate PnL: priceDiff -> pips -> account for direction -> multiply by pip value and size -> subtract fees
+    const priceDiff = exitPrice - t.entry
+    const pnlPips = (priceDiff / pipSize) * (t.side === 'sell' ? -1 : 1)
+    const pnl = (pnlPips * pipValue * t.size) - totalFees
+    
+    return pnl
+  }, [currentBar, t.entry, t.size, t.side, t.fees, symbolConfig, accountConfig])
 
   const [editing, setEditing] = useState(false)
   const [sl, setSl] = useState(t.sl?.toString() || '')

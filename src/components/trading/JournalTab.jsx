@@ -3,7 +3,7 @@ import { useTheme }        from '../../store/useThemeStore'
 import { useSimStore }     from '../../store/useSimStore'
 import { useTradeStore }   from '../../store/useTradeStore'
 import { useJournalStore } from '../../store/useJournalStore'
-import { getDecimalPlaces } from '../../utils/tradingUtils'
+import { getDecimalPlaces, getExitPrice } from '../../utils/tradingUtils'
 import { FONT }            from '../../constants'
 import { fmt, fmtPnl }     from '../../utils/format'
 import { SectionHeader }   from '../ui/atoms'
@@ -18,6 +18,8 @@ const SYMBOLS = ["EURUSD", "USDJPY", "GBPUSD", "USDCHF", "AUDUSD", "USDCAD", "NZ
 
 export function JournalTab() {
   const C         = useTheme()
+  const bars      = useSimStore((s) => s.bars)
+  const cursor    = useSimStore((s) => s.cursor)
   const symbolConfig = useSimStore((s) => s.symbolConfig)
   const accountConfig = useSimStore((s) => s.accountConfig)
   const trades    = useTradeStore((s) => s.trades)
@@ -31,11 +33,13 @@ export function JournalTab() {
   const exportCSV = useJournalStore((s) => s.exportCSV)
   const reset = useJournalStore((s) => s.reset)
 
+  const currentBar = bars[cursor - 1]
+
   const [showClosed, setShowClosed] = useState(false)
   const [scrollX, setScrollX] = useState(0)
   const [confirmClear, setConfirmClear] = useState(false)
 
-  // Auto-sync trades to journal
+  // Auto-sync trades to journal and recalculate balances
   useMemo(() => {
     trades.forEach(trade => {
       const entryExists = entries.find(e => e.tradeId === trade.id)
@@ -43,8 +47,12 @@ export function JournalTab() {
         syncOpenTrade(trade, symbolConfig, accountConfig)
       }
       
-      // Sync closed trades
-      if (trade.status === 'closed' && entryExists && !entryExists.exitPrice) {
+      // Sync closed trades even if they don't have a journal entry yet (e.g., closed before synced)
+      if (trade.status === 'closed' && !entryExists) {
+        // First sync as open trade, then immediately as closed
+        syncOpenTrade(trade, symbolConfig, accountConfig)
+        syncClosedTrade(trade, symbolConfig)
+      } else if (trade.status === 'closed' && entryExists && !entryExists.exitPrice) {
         syncClosedTrade(trade, symbolConfig)
       }
       
@@ -179,6 +187,9 @@ export function JournalTab() {
             showClosed={showClosed}
             C={C}
             priceDecimals={priceDecimals}
+            currentBar={currentBar}
+            symbolConfig={symbolConfig}
+            accountConfig={accountConfig}
           />
         </div>
       )}
@@ -187,7 +198,7 @@ export function JournalTab() {
 }
 
 // ── Journal Table Component ────────────────────────────────────
-function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, removeEntry, showClosed, C, priceDecimals }) {
+function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, removeEntry, showClosed, C, priceDecimals, currentBar, symbolConfig, accountConfig }) {
   const columnDefs = [
     // Account Details
     { key: 'account', label: 'ACCOUNT', width: 100, editable: true, type: 'dropdown', options: ACCOUNTS },
@@ -213,7 +224,7 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
     // Position Management
     { key: 'stopLoss', label: 'STOP LOSS', width: 100, editable: true, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
     { key: 'takeProfit', label: 'TAKE PROFIT', width: 110, editable: true, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
-    { key: 'risk', label: 'RISK ($)', width: 90, editable: true, format: (v) => `$${v.toFixed(2)}` },
+    { key: 'risk', label: 'RISK ($)', width: 90, editable: false, format: (v) => `$${v.toFixed(2)}` },
     { key: 'fees', label: 'FEES ($)', width: 85, editable: true, format: (v) => `$${v.toFixed(2)}` },
     
     // Results (auto-calculated)
@@ -264,6 +275,9 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
             modifyTrade={modifyTrade}
             removeEntry={removeEntry}
             C={C}
+            currentBar={currentBar}
+            symbolConfig={symbolConfig}
+            accountConfig={accountConfig}
           />
         ))}
       </tbody>
@@ -272,8 +286,35 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
 }
 
 // ── Table Row Component ────────────────────────────────────────
-function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTrade, removeEntry, C }) {
+function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTrade, removeEntry, C, currentBar, symbolConfig, accountConfig }) {
   const [editing, setEditing] = useState({})
+
+  // Calculate real-time PnL for open positions
+  const runtimePnL = useMemo(() => {
+    if (entry.exitPrice || !currentBar || !symbolConfig || !accountConfig) return entry
+    
+    const pipSize = symbolConfig.pip_size || 0.0001
+    const pipValue = symbolConfig.pip_value || 10
+    
+    // Get exit price with spread adjustment (what trader would actually receive)
+    const spreadInPips = accountConfig.spread || 0
+    const exitPrice = getExitPrice(currentBar.close, entry.direction === 'BUY' ? 'buy' : 'sell', spreadInPips, pipSize)
+    
+    const priceDiff = exitPrice - entry.entryPrice
+    const pnlPips = (priceDiff / pipSize) * (entry.direction === 'SELL' ? -1 : 1)
+    
+    // Use stored fees (already calculated as entry + exit commissions)
+    const totalFees = entry.fees || 0
+    
+    // P&L = raw P&L - all fees
+    const pnlUsd = pnlPips * pipValue * entry.lotSize - totalFees
+    
+    return {
+      ...entry,
+      pnlUsd,
+      pnlPips,
+    }
+  }, [entry, currentBar, symbolConfig, accountConfig])
 
   const handleChange = (key, value) => {
     // Convert numeric fields to numbers
@@ -304,7 +345,11 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
   return (
     <tr style={{ borderBottom: `1px solid ${C.border}18`, background: entry.winLoss === 'WIN' ? C.green + '08' : entry.winLoss === 'LOSS' ? C.red + '08' : 'transparent' }}>
       {columnDefs.map(col => {
-        const value = entry[col.key]
+        // Use runtime PnL for open positions
+        let value = entry[col.key]
+        if (!entry.exitPrice && (col.key === 'pnlUsd' || col.key === 'pnlPips')) {
+          value = runtimePnL[col.key]
+        }
         const formatted = col.format ? col.format(value) : value
         const isEditable = col.editable && !editing[col.key]
 
