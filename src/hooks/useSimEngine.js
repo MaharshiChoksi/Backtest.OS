@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useSimStore }       from '../store/useSimStore'
 import { useTradeStore }     from '../store/useTradeStore'
 import { useIndicatorStore } from '../store/useIndicatorStore'
-import { BASE_MS }           from '../constants'
+import { BASE_MS, getTimeframeMs } from '../constants'
 import { buildLine }         from '../utils/indicators'
 import { msToSeconds }       from '../utils/tradingUtils'
 
@@ -12,32 +12,26 @@ const R33 = '#f0505033'
 /**
  * Central simulation engine hook.
  *
- * HOT LOOP DESIGN — why refs everywhere:
- *  At 50× speed the interval fires every 16ms (~60 ticks/sec).
- *  Calling setCursor() inside the loop triggers a Zustand state update on every
- *  tick, which queues a React re-render on every tick, which starves the event
- *  loop so that button clicks (pause/step/seek) cannot be processed until the
- *  loop naturally slows down.
- *
- *  Solution: the hot loop reads and writes ONLY refs. A separate 80ms UI-sync
- *  timer is the only place that flushes cursorRef → Zustand store for display.
- *  Button actions write to the store synchronously; the hot loop reads the store
- *  via getState() on the next tick so it never needs to be a reactive subscriber.
+ * Features:
+ * - Multi-timeframe sync: all charts run at the same cursor position
+ * - Future data prevention: higher timeframe bars don't show until they complete
+ * - High-performance hot loop: refs-only state during playback
+ * - Speed controls: 1x, 5x, 10x, 50x, MAX
  */
 export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, rsiR }) {
   // For backwards compatibility with single-timeframe mode, build chartR
   const chartR = isMultiTimeframe ? simChartData[primaryTF]?.refs : { candle: { current: null }, vol: { current: null }, ema20: { current: null }, ema50: { current: null }, bbMid: { current: null }, bbUp: { current: null }, bbLow: { current: null } }
+  
   // ── Ref mirrors for all hot-loop state ────────────────────
-  // These are kept in sync by store subscriptions (below), not reactive hooks.
   const cursorRef   = useRef(useSimStore.getState().cursor)
   const playingRef  = useRef(false)
   const speedRef    = useRef(1)
   const indicRef    = useRef(useIndicatorStore.getState())
   const symbolConfigRef = useRef(useSimStore.getState().symbolConfig)
   const accountConfigRef = useRef(useSimStore.getState().accountConfig)
+  const selectedTimeframesRef = useRef(useSimStore.getState().selectedTimeframes)
 
-  // Stable action refs — Zustand actions never change identity, but we store
-  // them here so the hot loop never has to close over any reactive value.
+  // Stable action refs
   const evaluateFillsRef = useRef(null)
   useEffect(() => {
     evaluateFillsRef.current = useTradeStore.getState().evaluateFills
@@ -46,22 +40,21 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
 
   // ── Keep all refs in sync with their stores ───────────────
   useEffect(() => {
-    // Sync on mount
     const s = useSimStore.getState()
     cursorRef.current  = s.cursor
     playingRef.current = s.playing
     speedRef.current   = s.speed
     symbolConfigRef.current = s.symbolConfig
     accountConfigRef.current = s.accountConfig
+    selectedTimeframesRef.current = s.selectedTimeframes
 
     const unsub = useSimStore.subscribe((s) => {
-      // Only update cursor ref when NOT playing — during playback the loop
-      // owns cursorRef; external seeks update it via seekTo() directly.
       if (!playingRef.current) cursorRef.current = s.cursor
       playingRef.current = s.playing
       speedRef.current   = s.speed
       symbolConfigRef.current = s.symbolConfig
       accountConfigRef.current = s.accountConfig
+      selectedTimeframesRef.current = s.selectedTimeframes
     })
     return unsub
   }, [])
@@ -71,54 +64,114 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
     [],
   )
 
-  // ── Helper: find latest bar index in timeframe that doesn't exceed given time ──
-  const findBarIndex = (bars, time) => {
+  // ── Helper: find latest COMPLETED bar index that doesn't exceed given time ──
+  // For higher timeframes, a bar must be FULLY complete to be shown
+  const findCompletedBarIndex = useCallback((bars, time, tfMs) => {
+    // For the bar to be "completed", the next bar's start time must be <= current time
+    // This means we've passed the close of the current bar
+    for (let i = bars.length - 1; i >= 0; i--) {
+      const bar = bars[i]
+      // The bar is complete if:
+      // 1. Its start time is <= current time
+      // 2. The NEXT bar's start time (bar end + 1ms to ensure we passed it) <= current time
+      // OR it's the last bar (always show it)
+      if (bar.time <= time) {
+        // Check if this is truly complete or still forming
+        // A bar is complete if either:
+        // - It's the last bar in the dataset
+        // - OR the current time >= next bar's start time
+        const nextBar = bars[i + 1]
+        if (!nextBar || time >= nextBar.time) {
+          return i
+        }
+        // If next bar hasn't started yet, this bar is still forming - use previous bar
+        if (i > 0) {
+          return i - 1
+        }
+      }
+    }
+    return -1
+  }, [])
+
+  // ── Helper: find latest bar index that doesn't exceed given time (simple version) ──
+  const findBarIndex = useCallback((bars, time) => {
     let idx = -1
     for (let i = 0; i < bars.length; i++) {
       if (bars[i].time <= time) idx = i
       else break
     }
     return idx
-  }
+  }, [])
 
-  // ── Chart update for a single bar (pure side-effects, no state) ──
+  // ── Update a single chart with bar data ──
+  const updateSingleChart = useCallback((refs, barData, idx, ic, data) => {
+    if (!refs || !refs.candle?.current) return
+    
+    // Candlestick
+    refs.candle.current?.update(barData)
+    
+    // Volume
+    refs.vol.current?.update({
+      time: barData.time,
+      value: barData.volume,
+      color: barData.close >= barData.open ? G33 : R33,
+    })
+    
+    // EMA20
+    if (ic.ema20 && data.ema20 && data.ema20[idx] !== null) {
+      refs.ema20.current?.update({ time: barData.time, value: data.ema20[idx] })
+    }
+    
+    // EMA50
+    if (ic.ema50 && data.ema50 && data.ema50[idx] !== null) {
+      refs.ema50.current?.update({ time: barData.time, value: data.ema50[idx] })
+    }
+    
+    // Bollinger Bands
+    if (ic.bb && data.bb && data.bb.upper[idx] !== null) {
+      refs.bbMid.current?.update({ time: barData.time, value: data.bb.mid[idx] })
+      refs.bbUp.current?.update({ time: barData.time, value: data.bb.upper[idx] })
+      refs.bbLow.current?.update({ time: barData.time, value: data.bb.lower[idx] })
+    }
+  }, [])
+
+  // ── Chart update for a single bar (all timeframes) ──
   const updateChartForBar = useCallback(
     (bar, idx) => {
       const ic = indicRef.current
       
-      // Convert time to seconds for TradingView before passing
+      // Convert time to seconds for TradingView
       const barForChart = { ...bar, time: msToSeconds(bar.time) }
       
-      // Update primary chart
-      chartR.candle.current?.update(barForChart)
-      chartR.vol.current?.update({
-        time:  barForChart.time,
-        value: bar.volume,
-        color: bar.close >= bar.open ? G33 : R33,
-      })
-      if (ic.ema20 && ema20v[idx] !== null)
-        chartR.ema20.current?.update({ time: barForChart.time, value: ema20v[idx] })
-      if (ic.ema50 && ema50v[idx] !== null)
-        chartR.ema50.current?.update({ time: barForChart.time, value: ema50v[idx] })
-      if (ic.bb && bbData.upper[idx] !== null) {
-        chartR.bbMid.current?.update({ time: barForChart.time, value: bbData.mid[idx]   })
-        chartR.bbUp.current?.update(  { time: barForChart.time, value: bbData.upper[idx] })
-        chartR.bbLow.current?.update( { time: barForChart.time, value: bbData.lower[idx] })
-      }
-      if (ic.rsi && rsiVals[idx] !== null)
+      // Update primary chart (or single chart)
+      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema20: ema20v, ema50: ema50v, bb: bbData }
+      const primaryRefs = isMultiTimeframe ? simChartData[primaryTF]?.refs : chartR
+      
+      updateSingleChart(primaryRefs, barForChart, idx, ic, primaryData)
+      
+      // Update RSI (only in single timeframe mode)
+      if (!isMultiTimeframe && ic.rsi && rsiVals[idx] !== null) {
         rsiR.series.current?.update({ time: barForChart.time, value: rsiVals[idx] })
+      }
       
       // ── Update other timeframes in multi-timeframe mode ──
       if (isMultiTimeframe && simChartData) {
+        const currentTime = bar.time
+        
         Object.keys(simChartData).forEach((tf) => {
           if (tf === primaryTF) return  // Already updated above
           
           const tfData = simChartData[tf]?.data
           const tfRefs = simChartData[tf]?.refs
-          if (!tfData || !tfRefs) return
+          if (!tfData || !tfRefs || !tfRefs.candle?.current) return
           
-          // Find latest bar in this timeframe that doesn't exceed current time
-          const tfBarIdx = findBarIndex(tfData.bars, bar.time)
+          // Get timeframe in milliseconds for future data prevention
+          const tfMs = getTimeframeMs(tf)
+          
+          // Find the latest COMPLETED bar that doesn't exceed current time
+          const tfBarIdx = findCompletedBarIndex(tfData.bars, currentTime, tfMs)
+          
+          // If no completed bar yet, or bar hasn't changed, skip update
           if (tfBarIdx < 0) return
           
           const tfBar = tfData.bars[tfBarIdx]
@@ -128,25 +181,11 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
           const tfBarForChart = { ...tfBar, time: msToSeconds(tfBar.time) }
           
           // Update the other timeframe's chart
-          tfRefs.candle.current?.update(tfBarForChart)
-          tfRefs.vol.current?.update({
-            time:  tfBarForChart.time,
-            value: tfBar.volume,
-            color: tfBar.close >= tfBar.open ? G33 : R33,
-          })
-          if (ic.ema20 && tfData.ema20[tfBarIdx] !== null)
-            tfRefs.ema20.current?.update({ time: tfBarForChart.time, value: tfData.ema20[tfBarIdx] })
-          if (ic.ema50 && tfData.ema50[tfBarIdx] !== null)
-            tfRefs.ema50.current?.update({ time: tfBarForChart.time, value: tfData.ema50[tfBarIdx] })
-          if (ic.bb && tfData.bb.upper[tfBarIdx] !== null) {
-            tfRefs.bbMid.current?.update({ time: tfBarForChart.time, value: tfData.bb.mid[tfBarIdx]   })
-            tfRefs.bbUp.current?.update(  { time: tfBarForChart.time, value: tfData.bb.upper[tfBarIdx] })
-            tfRefs.bbLow.current?.update( { time: tfBarForChart.time, value: tfData.bb.lower[tfBarIdx] })
-          }
+          updateSingleChart(tfRefs, tfBarForChart, tfBarIdx, ic, tfData)
         })
       }
     },
-    [chartR, rsiR, ema20v, ema50v, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF],
+    [chartR, rsiR, ema20v, ema50v, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, updateSingleChart, findCompletedBarIndex],
   )
 
   // ── processBar — chart update + trade fill evaluation ─────
@@ -164,7 +203,7 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
     if (cur >= bars.length) return
     processBar(bars[cur], cur)
     cursorRef.current = cur + 1
-    useSimStore.getState().setCursor(cur + 1)  // step is always a single render, safe
+    useSimStore.getState().setCursor(cur + 1)
   }, [bars, processBar])
 
   // ── Seek — full series rebuild at target index ────────────
@@ -172,10 +211,13 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
     (idx) => {
       const target = Math.max(1, Math.min(bars.length, idx))
       cursorRef.current = target
-      useSimStore.getState().setCursor(target)  // one render on seek, fine
+      useSimStore.getState().setCursor(target)
 
       const ic    = indicRef.current
       const slice = bars.slice(0, target)
+      
+      // Get target time for syncing other timeframes
+      const targetTime = bars[target - 1]?.time
       
       // Convert times to seconds for TradingView
       const candleData = slice.map(b => ({ ...b, time: msToSeconds(b.time) }))
@@ -185,38 +227,53 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
         color: b.close >= b.open ? G33 : R33,
       }))
 
-      // Update primary chart
-      chartR.candle.current?.setData(candleData)
-      chartR.vol.current?.setData(volData)
-      chartR.ema20.current?.setData(ic.ema20 ? buildLine(ema20v, target, times) : [])
-      chartR.ema50.current?.setData(ic.ema50 ? buildLine(ema50v, target, times) : [])
+      // Update primary chart (or single chart)
+      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema20: ema20v, ema50: ema50v, bb: bbData, times }
+      const primaryRefs = isMultiTimeframe ? simChartData[primaryTF]?.refs : chartR
+      
+      primaryRefs.candle.current?.setData(candleData)
+      primaryRefs.vol.current?.setData(volData)
+      primaryRefs.ema20.current?.setData(ic.ema20 ? buildLine(primaryData.ema20, target, primaryData.times) : [])
+      primaryRefs.ema50.current?.setData(ic.ema50 ? buildLine(primaryData.ema50, target, primaryData.times) : [])
       if (ic.bb) {
-        chartR.bbMid.current?.setData(buildLine(bbData.mid,   target, times))
-        chartR.bbUp.current?.setData( buildLine(bbData.upper, target, times))
-        chartR.bbLow.current?.setData(buildLine(bbData.lower, target, times))
+        primaryRefs.bbMid.current?.setData(buildLine(primaryData.bb.mid, target, primaryData.times))
+        primaryRefs.bbUp.current?.setData(buildLine(primaryData.bb.upper, target, primaryData.times))
+        primaryRefs.bbLow.current?.setData(buildLine(primaryData.bb.lower, target, primaryData.times))
       } else {
-        chartR.bbMid.current?.setData([])
-        chartR.bbUp.current?.setData([])
-        chartR.bbLow.current?.setData([])
+        primaryRefs.bbMid.current?.setData([])
+        primaryRefs.bbUp.current?.setData([])
+        primaryRefs.bbLow.current?.setData([])
       }
-      rsiR.series.current?.setData(ic.rsi ? buildLine(rsiVals, target, times) : [])
+      
+      if (!isMultiTimeframe) {
+        rsiR.series.current?.setData(ic.rsi ? buildLine(rsiVals, target, times) : [])
+      }
       
       // ── Update other timeframes in multi-timeframe mode ──
-      if (isMultiTimeframe && simChartData) {
-        // Get the target time from primary chart
-        const targetTime = bars[target - 1]?.time
-        if (!targetTime) return
-        
+      if (isMultiTimeframe && simChartData && targetTime) {
         Object.keys(simChartData).forEach((tf) => {
-          if (tf === primaryTF) return  // Already updated above
+          if (tf === primaryTF) return
           
           const tfData = simChartData[tf]?.data
           const tfRefs = simChartData[tf]?.refs
-          if (!tfData || !tfRefs) return
+          if (!tfData || !tfRefs || !tfRefs.candle?.current) return
           
-          // Find latest bar in this timeframe that doesn't exceed target time
-          const tfTarget = findBarIndex(tfData.bars, targetTime)
-          if (tfTarget < 0) return
+          // Get timeframe in ms for future data prevention
+          const tfMs = getTimeframeMs(tf)
+          
+          // Find the latest COMPLETED bar
+          const tfTarget = findCompletedBarIndex(tfData.bars, targetTime, tfMs)
+          if (tfTarget < 0) {
+            // No completed bars yet - clear the chart
+            tfRefs.candle.current?.setData([])
+            tfRefs.vol.current?.setData([])
+            tfRefs.ema20.current?.setData([])
+            tfRefs.ema50.current?.setData([])
+            tfRefs.bbMid.current?.setData([])
+            tfRefs.bbUp.current?.setData([])
+            tfRefs.bbLow.current?.setData([])
+            return
+          }
           
           const tfSlice = tfData.bars.slice(0, tfTarget + 1)
           
@@ -234,8 +291,8 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
           tfRefs.ema20.current?.setData(ic.ema20 ? buildLine(tfData.ema20, tfTarget + 1, tfData.times) : [])
           tfRefs.ema50.current?.setData(ic.ema50 ? buildLine(tfData.ema50, tfTarget + 1, tfData.times) : [])
           if (ic.bb) {
-            tfRefs.bbMid.current?.setData(buildLine(tfData.bb.mid,   tfTarget + 1, tfData.times))
-            tfRefs.bbUp.current?.setData( buildLine(tfData.bb.upper, tfTarget + 1, tfData.times))
+            tfRefs.bbMid.current?.setData(buildLine(tfData.bb.mid, tfTarget + 1, tfData.times))
+            tfRefs.bbUp.current?.setData(buildLine(tfData.bb.upper, tfTarget + 1, tfData.times))
             tfRefs.bbLow.current?.setData(buildLine(tfData.bb.lower, tfTarget + 1, tfData.times))
           } else {
             tfRefs.bbMid.current?.setData([])
@@ -245,29 +302,19 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
         })
       }
     },
-    [bars, times, chartR, rsiR, ema20v, ema50v, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF],
+    [bars, times, chartR, rsiR, ema20v, ema50v, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, findCompletedBarIndex],
   )
 
   // ── HOT LOOP ─────────────────────────────────────────────
-  // Runs once per session (bars is stable after load).
-  // Reads ONLY refs — zero reactive state reads, zero setCursor calls.
-  // The UI-sync timer below is the only thing that writes to the store.
   useEffect(() => {
     if (!bars.length) return
 
     let tickId  = null
     let syncId  = null
-    let genId = 0  // Generation ID: invalidates all old pending timeouts when play/pause changes
+    let genId = 0
     let shouldTick = false
 
-    // Recursive setTimeout instead of setInterval:
-    //   - Self-schedules only after current tick completes → no backlog builds up
-    //   - Respects speed changes on every tick via speedRef
-    //   - Naturally responsive: if the JS thread is busy (e.g. processing a click),
-    //     the next tick simply fires a few ms late — it does NOT queue up dozens of
-    //     pending executions like setInterval would at high speeds
     const tick = (currentGen) => {
-      // Exit if this tick belongs to an old generation (pause happened, then play happened again)
       if (currentGen !== genId) return
       if (!shouldTick || !playingRef.current) return
 
@@ -280,62 +327,52 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
       processBar(bars[cur], cur)
       cursorRef.current = cur + 1
 
-      // Before rescheduling, verify generation ID hasn't changed AND playing state is still true
-      // This prevents orphaned timeouts during rapid play/pause toggles at high speeds
       if (currentGen === genId && shouldTick && useSimStore.getState().playing) {
-        const delay = Math.max(16, BASE_MS / speedRef.current)
+        // Calculate delay based on speed
+        const speed = speedRef.current
+        // BASE_MS is ~420ms at 1x speed
+        // At 1x: 420ms per bar, At 5x: 84ms, At 10x: 42ms, At 50x: 8.4ms, At MAX: ~0.2ms
+        const delay = Math.max(1, Math.floor(BASE_MS / speed))
         tickId = setTimeout(() => tick(currentGen), delay)
       }
     }
 
-    // Start the loop when playing becomes true
     const unsubPlaying = useSimStore.subscribe((s, prev) => {
-      // Transition: not playing → playing
       if (s.playing && !(prev && prev.playing)) {
-        genId++  // Increment generation to invalidate all old pending ticks
+        genId++
         shouldTick = true
-        if (tickId) {
-          clearTimeout(tickId)
-          tickId = null
-        }
+        if (tickId) clearTimeout(tickId)
+        tickId = null
         tick(genId)
       }
-      // Transition: playing → not playing
       if (!s.playing && prev && prev.playing) {
-        genId++  // Increment generation to invalidate any pending ticks
+        genId++
         shouldTick = false
-        if (tickId) {
-          clearTimeout(tickId)
-          tickId = null
-        }
+        if (tickId) clearTimeout(tickId)
+        tickId = null
       }
     })
 
-    // If already playing when this effect runs (e.g. bars hot-reloaded mid-play)
     if (playingRef.current) {
       shouldTick = true
       tick(genId)
     }
 
-    // ── UI sync timer ────────────────────────────────────────
-    // Flushes cursorRef → Zustand store at most every 80ms.
-    // This is the ONLY place that triggers a React re-render during playback.
-    // 80ms means ~12 renders/sec for the progress bar — imperceptible lag,
-    // but the event queue stays clear for button interactions at any speed.
+    // UI sync timer - flushes cursor to store at 60fps (16ms) for smooth progress bar
     syncId = setInterval(() => {
       if (playingRef.current) {
         useSimStore.getState().setCursor(cursorRef.current)
       }
-    }, 80)
+    }, 16)
 
     return () => {
-      genId++  // Invalidate any pending ticks on cleanup
+      genId++
       shouldTick = false
       if (tickId) clearTimeout(tickId)
       if (syncId) clearInterval(syncId)
       unsubPlaying()
     }
-  }, [bars, processBar]) // bars and processBar are both stable after session load
+  }, [bars, processBar])
 
   // ── Keyboard shortcuts ────────────────────────────────────
   useEffect(() => {
