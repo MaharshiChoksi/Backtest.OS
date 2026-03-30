@@ -11,6 +11,7 @@
         "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0"
     },
     "dependencies": {
+        "@vercel/analytics": "^2.0.1",
         "apache-arrow": "^15.0.2",
         "lightweight-charts": "^4.2.1",
         "papaparse": "^5.4.1",
