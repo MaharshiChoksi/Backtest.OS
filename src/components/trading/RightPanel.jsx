@@ -6,7 +6,7 @@ import { fmtPnl, fmtDate, fmt, guessDecimals } from '../../utils/format'
 import { TabBar, SectionHeader, pill }           from '../ui/atoms'
 import { TradeForm }           from './TradeForm'
 import { OpenPositionCard }    from './OpenPositionCard'
-import { calculatePnL } from '../../utils/tradingUtils'
+import { calculatePnL, getExitPrice } from '../../utils/tradingUtils'
 
 export function RightPanel({PanWidth}) {
   const C     = useTheme()
@@ -37,8 +37,13 @@ function TradesTab() {
     if (!currentBar || !openTrades.length || !symbolConfig || !accountConfig) return 0
     
     return openTrades.reduce((sum, t) => {
+      // Calculate exit price with spread adjustment
+      const spreadInPips = accountConfig.spread || 0
+      const pipSize = symbolConfig.pip_size || 0.0001
+      const exitPrice = getExitPrice(currentBar.close, t.side, spreadInPips, pipSize)
+      
       // Use proper pip-based PnL calculation
-      const pnl = calculatePnL(t.entry, currentBar.close, t.size, symbolConfig, accountConfig)
+      const pnl = calculatePnL(t.entry, exitPrice, t.size, symbolConfig, accountConfig)
       return sum + (t.side === 'buy' ? pnl : -pnl)
     }, 0)
   }, [openTrades, currentBar, symbolConfig, accountConfig])

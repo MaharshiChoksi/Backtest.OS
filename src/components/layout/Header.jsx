@@ -1,7 +1,7 @@
 import { useThemeStore } from "../../store/useThemeStore";
 import { useSimStore }   from "../../store/useSimStore";
 import { useTradeStore } from "../../store/useTradeStore";
-import { getDecimalPlaces } from "../../utils/tradingUtils";
+import { getDecimalPlaces, getExitPrice } from "../../utils/tradingUtils";
 import { FONT } from "../../constants/index";
 import { pill } from "../ui/atoms";
 import { fmt, fmtPnl, fmtDate } from "../../utils/format";
@@ -9,7 +9,7 @@ import { fmt, fmtPnl, fmtDate } from "../../utils/format";
 export function Header({ onReset, hoverBar }) {
   const C             = useThemeStore((s) => s.C);
   const { theme, toggleTheme } = useThemeStore();
-  const { bars, cursor, fileName, symbolConfig } = useSimStore();
+  const { bars, cursor, fileName, symbolConfig, accountConfig } = useSimStore();
   const { trades }    = useTradeStore();
 
   const currentBar  = bars[cursor - 1];
@@ -32,7 +32,10 @@ export function Header({ onReset, hoverBar }) {
     if (!currentBar || !symbolConfig) return s;
     const pip_size = symbolConfig.pip_size || 0.0001;
     const pip_value = symbolConfig.pip_value || 10;
-    const priceDiff = currentBar.close - t.entry;
+    // Calculate exit price with spread adjustment (what they'd get if closing at market now)
+    const spreadInPips = accountConfig ? (accountConfig.spread || 0) : 0;
+    const exitPrice = getExitPrice(currentBar.close, t.side, spreadInPips, pip_size);
+    const priceDiff = exitPrice - t.entry;
     const pips = (priceDiff / pip_size) * (t.side === "sell" ? -1 : 1);
     const pnl = pips * pip_value * t.size;
     return s + pnl;

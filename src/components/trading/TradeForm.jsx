@@ -12,6 +12,7 @@ export function TradeForm() {
   const bars       = useSimStore((s) => s.bars)
   const cursor     = useSimStore((s) => s.cursor)
   const symbolConfig = useSimStore((s) => s.symbolConfig)
+  const accountConfig = useSimStore((s) => s.accountConfig)
   const openTrade  = useTradeStore((s) => s.openTrade)
 
   const currentBar = bars[cursor - 1]
@@ -33,12 +34,23 @@ export function TradeForm() {
   const inp = mkInp(C)
   const lbl = mkLabel(C)
 
+  // Calculate entry price with spread adjustment
+  // BUY: pay ask (close + spread), SELL: receive bid (close - spread)
+  const spreadInPips = accountConfig ? (accountConfig.spread || 0) : 0
+  const pipSize = symbolConfig ? (symbolConfig.pip_size || 0.0001) : 0.0001
+  const spreadInPrice = spreadInPips * pipSize
+  const entryPrice = currentBar ? (
+    isBuy
+      ? currentBar.close + spreadInPrice
+      : currentBar.close - spreadInPrice
+  ) : null
+
   const handleOpen = () => {
-    if (!currentBar) return
+    if (!currentBar || !entryPrice) return
     openTrade({
       side,
       size:     parseFloat(size) || 0.1,
-      entry:    currentBar.close,
+      entry:    entryPrice,
       sl:       parseFloat(sl) || null,
       tp:       parseFloat(tp) || null,
       openTime: currentBar.time,
@@ -114,11 +126,14 @@ export function TradeForm() {
         />
       </div>
 
-      {/* At market */}
-      {currentBar && (
+      {/* At market (with spread adjustment) */}
+      {currentBar && entryPrice !== null && (
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: 12, color: C.muted }}>
-          <span>At market</span>
-          <span style={{ color: C.text }}>{fmt(currentBar.close, dec)}</span>
+          <span>{isBuy ? 'Ask (buy)' : 'Bid (sell)'}</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ color: C.muted, fontSize: 10 }}>{fmt(currentBar.close, dec)}</span>
+            <span style={{ color: accent, fontWeight: 600 }}>{fmt(entryPrice, dec)}</span>
+          </div>
         </div>
       )}
 
@@ -130,7 +145,7 @@ export function TradeForm() {
           padding:      '9px 0',
           borderRadius: 5,
           cursor:       currentBar ? 'pointer' : 'not-allowed',
-          fontSize:     11,
+          fontSize:     13,
           fontFamily:   FONT,
           fontWeight:   700,
           letterSpacing:'0.5px',

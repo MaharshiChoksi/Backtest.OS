@@ -30,6 +30,36 @@ export function getDecimalPlaces(pipSize) {
 }
 
 /**
+ * Get entry price adjusted for spread based on side
+ * BUY: pay ask (close + spread), SELL: receive bid (close - spread)
+ * @param {number} closePrice - The close/market price
+ * @param {string} side - 'buy' or 'sell'
+ * @param {number} spreadPips - Spread in pips from accountConfig
+ * @param {number} pipSize - Pip size from symbolConfig
+ */
+export function getEntryPrice(closePrice, side, spreadPips = 0, pipSize = 0.0001) {
+  const spreadInPrice = spreadPips * pipSize
+  return side === 'buy'
+    ? closePrice + spreadInPrice  // pay ask
+    : closePrice - spreadInPrice  // receive bid
+}
+
+/**
+ * Get exit price adjusted for spread based on side (opposite of entry)
+ * LONG: receive bid (close - spread), SHORT: pay ask (close + spread)
+ * @param {number} closePrice - The close/market price
+ * @param {string} side - 'buy' or 'sell'
+ * @param {number} spreadPips - Spread in pips from accountConfig
+ * @param {number} pipSize - Pip size from symbolConfig
+ */
+export function getExitPrice(closePrice, side, spreadPips = 0, pipSize = 0.0001) {
+  const spreadInPrice = spreadPips * pipSize
+  return side === 'buy'
+    ? closePrice - spreadInPrice  // receive bid when closing long
+    : closePrice + spreadInPrice  // pay ask when closing short
+}
+
+/**
  * Format price with correct decimal places
  */
 export function formatPrice(price, symbolConfig) {
