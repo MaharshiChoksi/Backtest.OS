@@ -33,12 +33,11 @@ export const useJournalStore = create((set, get) => ({
         ? Math.abs((trade.entry - trade.sl) / pip_size) * (symbolConfig?.pip_value || 10) * trade.size
         : 0
 
-      // Calculate balance: for first trade use starting balance, else prev balance + prev pnl
+      // Calculate balance: Starting balance + cumulative PnL from all closed trades
       let balance = accountConfig?.starting_balance || 0
-      if (s.entries.length > 0) {
-        const lastEntry = s.entries[s.entries.length - 1]
-        balance = lastEntry.balance + (lastEntry.pnlUsd || 0)
-      }
+      const closedTrades = s.entries.filter(e => e.exitPrice)
+      const cumulativePnL = closedTrades.reduce((sum, e) => sum + (e.pnlUsd || 0), 0)
+      balance = balance + cumulativePnL
 
       const newEntry = {
         tradeId: trade.id,
@@ -145,13 +144,20 @@ export const useJournalStore = create((set, get) => ({
         if (e.tradeId !== tradeId) return e
         
         const newEntry = { ...e, [field]: value }
+        const pip_size = 0.0001 // Default
         
-        // Recalculate RR when risk changes or when SL/TP change
-        if (field === 'risk' || field === 'stopLoss' || field === 'takeProfit') {
+        // Recalculate risk when SL changes (for open positions)
+        if (field === 'stopLoss' && newEntry.stopLoss && !newEntry.exitPrice) {
+          const riskPips = Math.abs((newEntry.entryPrice - newEntry.stopLoss) / pip_size)
+          const pipValue = 10 // Default
+          newEntry.risk = riskPips * pipValue * newEntry.lotSize
+        }
+        
+        // Recalculate RR when SL/TP change
+        if (field === 'stopLoss' || field === 'takeProfit') {
           if (newEntry.stopLoss && newEntry.takeProfit) {
-            const pip_size = 0.0001 // Default, can be enhanced
-            const riskPips = Math.round(Math.abs((newEntry.entryPrice - newEntry.stopLoss) / pip_size), 2)
-            const rewardPips = Math.round(Math.abs((newEntry.takeProfit - newEntry.entryPrice) / pip_size), 2)
+            const riskPips = Math.abs((newEntry.entryPrice - newEntry.stopLoss) / pip_size)
+            const rewardPips = Math.abs((newEntry.takeProfit - newEntry.entryPrice) / pip_size)
             newEntry.rr = riskPips > 0 ? parseFloat((rewardPips / riskPips).toFixed(2)) : 0
           }
         }

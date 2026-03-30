@@ -22,7 +22,14 @@ Load your CSV or Parquet data and replay it bar by bar. Play at normal speed, pa
 Click to enter trades with entry price, stop loss, and take profit levels. The platform shows you exactly where these levels sit on the chart with clean visual markers. If price hits your stop loss or take profit, the trade closes automatically—just like real trading. Your P&L updates in real-time as you play through data.
 
 ### 📔 Keep a Trade Journal  
-Every trade gets logged in an automatically-syncing journal. Edit your stop losses or profit targets during the replay and watch the journal update instantly. The app calculates your profit/loss, win/loss ratio, and running account balance. Export everything to Excel for deeper analysis or just clear it and start over.
+Every trade gets logged in an automatically-syncing journal. Edit your stop losses or profit targets during the replay and watch the journal update instantly. The app automatically calculates risk based on your SL, P&L (accounting for spread), win/loss ratio, and running account balance. Export everything to Excel for deeper analysis or just clear it and start over.
+
+**Journal Features**:
+- **Risk Calculation**: Automatically computed from entry - SL difference, updated whenever SL/TP changes
+- **Real-Time P&L**: Floating P&L for open positions updates every tick, accounting for spread cost
+- **Cumulative Balance**: Tracks account balance across trades (Starting Balance + All Closed Trade P&L)
+- **Editable Fields**: Customize session, strategy, macro regime, analysis timeframe, and trading notes
+- **Export to Excel**: Download all trades as TSV for external analysis
 
 ### 🖩 Dynamic Calculations
 The math is precise: P&L accounts for spread, commissions, lot sizes, and the pips you win or lose. Your account balance tracks through every trade, so you see exactly how your strategy compounds over time.
@@ -232,7 +239,25 @@ The app is built to be fast. The simulation engine runs every 16 milliseconds, w
 
 ---
 
-## Privacy & Data
+## 📊 How Spread Works
+
+The backtester accounts for realistic bid/ask spread across the entire system:
+
+**On Entry**:
+- **BUY**: You pay the ASK price = Close + (Spread ÷ 2)
+- **SELL**: You receive the BID price = Close - (Spread ÷ 2)
+
+**On Exit** (Closing Manually or via SL/TP):
+- **LONG**: You receive the BID price = Close - (Spread ÷ 2) [receive less]
+- **SHORT**: You pay the ASK price = Close + (Spread ÷ 2) [pay more]
+
+**Where It Applies**:
+- Trade entry prices in position form
+- All P&L calculations (position cards, header, sidebar, journal)
+- Floating P&L updates real-time accounting for spread cost
+- Journal entry displays realistic bid/ask prices
+
+This means your backtest matches real trading conditions—spread cost is deducted from both entry and exit, making your results truly representative of live trading.
 
 Everything stays on your machine. Your data never leaves your browser. We cache things locally so reopening the app is fast, and your trade journal is saved in browser storage so your work sticks around. You can clear the cache if you want a fresh start, and there's a button to wipe the journal anytime.
 
@@ -246,7 +271,20 @@ Everything stays on your machine. Your data never leaves your browser. We cache 
 - Charts all sync up during playback
 - Smart responsive layout adapts to how many charts you're viewing
 - P&L calculations are rock-solid with proper lot-size scaling
-- **SpreadBug Fix**: Spread is now correctly applied to entry prices, exit prices, and all P&L calculations across all displays (position cards, header, sidebar, and trade panel). Entry prices reflect actual bid/ask prices traders would pay, and P&L accounts for the cost of spread on both entry and exit.
+- **Spread Applied System-Wide**: Spread is now correctly applied to entry prices, exit prices, and all P&L calculations across all displays:
+  - Entry prices reflect actual bid/ask prices traders would pay
+  - P&L accounts for the cost of spread on both entry and exit
+  - Floating P&L in journal shows realistic P&L after spread deduction
+  - Position cards, header, sidebar all display spread-adjusted P&L
+- **Journal Balance Tracking**: Account balance now properly tracks across multiple trades
+  - Balance = Starting Balance + Cumulative P&L from all closed trades
+  - Correctly reflects post-trade balance for next trades
+- **Dynamic Risk Calculation**: Risk($) auto-calculates when SL/TP are set or modified
+  - Risk = |entry - SL| / pip_size × pip_value × lot_size
+  - Recalculates in real-time when editing SL in journal
+- **Real-Time Journal PnL**: Open positions show floating P&L that updates every tick
+  - Accounts for spread on potential market exit
+  - Includes all fees and commissions
 
 **V1.5**
 - Added the full trade journal with all the important stats

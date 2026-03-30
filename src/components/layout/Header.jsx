@@ -29,15 +29,23 @@ export function Header({ onReset, hoverBar }) {
   const closedTrades = trades.filter((t) => t.status === "closed");
   const totalPnl     = closedTrades.reduce((s, t) => s + (t.pnl ?? 0), 0);
   const floatingPnl  = openTrades.reduce((s, t) => {
-    if (!currentBar || !symbolConfig) return s;
-    const pip_size = symbolConfig.pip_size || 0.0001;
-    const pip_value = symbolConfig.pip_value || 10;
+    if (!currentBar || !symbolConfig || !accountConfig) return s;
+    
+    const pipSize = symbolConfig.pip_size || 0.0001;
+    const pipValue = symbolConfig.pip_value || 10;
+    
     // Calculate exit price with spread adjustment (what they'd get if closing at market now)
-    const spreadInPips = accountConfig ? (accountConfig.spread || 0) : 0;
-    const exitPrice = getExitPrice(currentBar.close, t.side, spreadInPips, pip_size);
+    const spreadInPips = accountConfig.spread || 0;
+    const exitPrice = getExitPrice(currentBar.close, t.side, spreadInPips, pipSize);
+    
+    // Use stored fees (already calculated as entry + exit commissions)
+    const totalFees = t.fees || 0;
+    
+    // Calculate PnL: priceDiff -> pips -> account for direction -> multiply by pip value and size -> subtract fees
     const priceDiff = exitPrice - t.entry;
-    const pips = (priceDiff / pip_size) * (t.side === "sell" ? -1 : 1);
-    const pnl = pips * pip_value * t.size;
+    const pnlPips = (priceDiff / pipSize) * (t.side === 'sell' ? -1 : 1);
+    const pnl = (pnlPips * pipValue * t.size) - totalFees;
+    
     return s + pnl;
   }, 0);
 
