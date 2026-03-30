@@ -257,6 +257,8 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
 
     let tickId  = null
     let syncId  = null
+    let genId = 0  // Generation ID: invalidates all old pending timeouts when play/pause changes
+    let shouldTick = false
 
     // Recursive setTimeout instead of setInterval:
     //   - Self-schedules only after current tick completes → no backlog builds up
@@ -264,8 +266,10 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
     //   - Naturally responsive: if the JS thread is busy (e.g. processing a click),
     //     the next tick simply fires a few ms late — it does NOT queue up dozens of
     //     pending executions like setInterval would at high speeds
-    const tick = () => {
-      if (!playingRef.current) return          // paused — don't reschedule
+    const tick = (currentGen) => {
+      // Exit if this tick belongs to an old generation (pause happened, then play happened again)
+      if (currentGen !== genId) return
+      if (!shouldTick || !playingRef.current) return
 
       const cur = cursorRef.current
       if (cur >= bars.length) {
@@ -276,27 +280,42 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
       processBar(bars[cur], cur)
       cursorRef.current = cur + 1
 
-      // Schedule next tick using CURRENT speed (speedRef is always fresh)
-      const delay = Math.max(16, BASE_MS / speedRef.current)
-      tickId = setTimeout(tick, delay)
+      // Before rescheduling, verify generation ID hasn't changed AND playing state is still true
+      // This prevents orphaned timeouts during rapid play/pause toggles at high speeds
+      if (currentGen === genId && shouldTick && useSimStore.getState().playing) {
+        const delay = Math.max(16, BASE_MS / speedRef.current)
+        tickId = setTimeout(() => tick(currentGen), delay)
+      }
     }
 
     // Start the loop when playing becomes true
     const unsubPlaying = useSimStore.subscribe((s, prev) => {
       // Transition: not playing → playing
       if (s.playing && !(prev && prev.playing)) {
-        tick()
+        genId++  // Increment generation to invalidate all old pending ticks
+        shouldTick = true
+        if (tickId) {
+          clearTimeout(tickId)
+          tickId = null
+        }
+        tick(genId)
       }
-      // Transition: playing → not playing — tick() will self-stop on next call
-      // via the playingRef.current guard, so no explicit cancel needed here.
-      // However, cancel any pending setTimeout to be clean:
+      // Transition: playing → not playing
       if (!s.playing && prev && prev.playing) {
-        clearTimeout(tickId)
+        genId++  // Increment generation to invalidate any pending ticks
+        shouldTick = false
+        if (tickId) {
+          clearTimeout(tickId)
+          tickId = null
+        }
       }
     })
 
     // If already playing when this effect runs (e.g. bars hot-reloaded mid-play)
-    if (playingRef.current) tick()
+    if (playingRef.current) {
+      shouldTick = true
+      tick(genId)
+    }
 
     // ── UI sync timer ────────────────────────────────────────
     // Flushes cursorRef → Zustand store at most every 80ms.
@@ -310,8 +329,10 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
     }, 80)
 
     return () => {
-      clearTimeout(tickId)
-      clearInterval(syncId)
+      genId++  // Invalidate any pending ticks on cleanup
+      shouldTick = false
+      if (tickId) clearTimeout(tickId)
+      if (syncId) clearInterval(syncId)
       unsubPlaying()
     }
   }, [bars, processBar]) // bars and processBar are both stable after session load
