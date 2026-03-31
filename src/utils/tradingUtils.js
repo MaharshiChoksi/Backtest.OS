@@ -16,6 +16,114 @@ export function barsToTradingViewFormat(bars) {
   }))
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// TIMEZONE UTILITIES
+// Bars are stored internally in UTC (milliseconds). These helpers convert
+// between UTC and the user's selected data timezone for display purposes.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Convert a timestamp from data timezone to UTC
+ * @param {number} timestamp - Timestamp in milliseconds (in data timezone)
+ * @param {number} timezoneOffset - Offset in hours from UTC (e.g., 3 for GMT+3)
+ * @returns {number} Timestamp in milliseconds (UTC)
+ */
+export function convertToUTC(timestamp, timezoneOffset) {
+  if (!timezoneOffset) return timestamp  // Already UTC
+  const offsetMs = timezoneOffset * 60 * 60 * 1000
+  return timestamp - offsetMs  // Subtract offset to get UTC
+}
+
+/**
+ * Convert a UTC timestamp to data timezone
+ * @param {number} timestamp - Timestamp in milliseconds (UTC)
+ * @param {number} timezoneOffset - Offset in hours from UTC (e.g., 3 for GMT+3)
+ * @returns {number} Timestamp in milliseconds (in data timezone)
+ */
+export function convertFromUTC(timestamp, timezoneOffset) {
+  if (!timezoneOffset) return timestamp  // Already UTC
+  const offsetMs = timezoneOffset * 60 * 60 * 1000
+  return timestamp + offsetMs  // Add offset to get data timezone
+}
+
+/**
+ * Apply timezone offset to all bars in a bars array
+ * Converts bar timestamps from data timezone to UTC for internal storage
+ * @param {Array} bars - Array of bar objects with time property
+ * @param {number} timezoneOffset - Offset in hours from UTC (e.g., 3 for GMT+3)
+ * @returns {Array} Bars with timestamps converted to UTC
+ */
+export function applyTimezoneToBars(bars, timezoneOffset) {
+  if (!timezoneOffset || !bars || bars.length === 0) return bars
+  
+  return bars.map(bar => ({
+    ...bar,
+    time: convertToUTC(bar.time, timezoneOffset)
+  }))
+}
+
+/**
+ * Get session information for a given timestamp
+ * Sessions are defined in the data's timezone, not UTC
+ * @param {number} timestamp - Timestamp in milliseconds (UTC)
+ * @param {number} timezoneOffset - Data timezone offset in hours
+ * @returns {Object} Session info { name, isActive }
+ */
+export function getSessionForTimestamp(timestamp, timezoneOffset = 0) {
+  // Convert UTC to data timezone for session calculation
+  const dataTime = convertFromUTC(timestamp, timezoneOffset)
+  const date = new Date(dataTime)
+  const hour = date.getUTCHours() + timezoneOffset  // Hour in data timezone
+  
+  // Normalize to 0-23 range
+  const normalizedHour = ((hour % 24) + 24) % 24
+  
+  // Session definitions (in data timezone, typical for MT4/MT5)
+  // London: 08:00 - 17:00 (data timezone)
+  // New York: 13:00 - 18:00 (data timezone) 
+  // Tokyo: 00:00 - 09:00 (data timezone)
+  // Sydney: 22:00 - 07:00 (data timezone)
+  
+  const sessions = [
+    { name: 'LONDON', start: 8, end: 17 },
+    { name: 'NEWYORK', start: 13, end: 18 },
+    { name: 'TOKYO', start: 0, end: 9 },
+    { name: 'SYDNEY', start: 22, end: 7 },  // Overnight session
+  ]
+  
+  for (const session of sessions) {
+    let isActive = false
+    if (session.start < session.end) {
+      // Normal session (e.g., 8-17)
+      isActive = normalizedHour >= session.start && normalizedHour < session.end
+    } else {
+      // Overnight session (e.g., 22-7)
+      isActive = normalizedHour >= session.start || normalizedHour < session.end
+    }
+    if (isActive) {
+      return { name: session.name, isActive: true }
+    }
+  }
+  
+  return { name: null, isActive: false }
+}
+
+/**
+ * Check if a given hour is within a trading session
+ * @param {number} hour - Hour in 24h format (0-23)
+ * @param {number} start - Session start hour
+ * @param {number} end - Session end hour
+ * @returns {boolean}
+ */
+export function isInSession(hour, start, end) {
+  if (start < end) {
+    return hour >= start && hour < end
+  } else {
+    // Overnight session
+    return hour >= start || hour < end
+  }
+}
+
 /**
  * Calculate decimal places to display based on pip_size
  * pip_size determines the last significant digit
@@ -126,13 +234,15 @@ export function getTimeframeMs(timeframe) {
 /**
  * Detect timeframe from bars data
  * Returns most common interval between consecutive bars
+ * Note: bar.time is in milliseconds (Unix timestamp in ms)
  */
 export function detectTimeframe(bars) {
   if (bars.length < 2) return '1h'
 
   const intervals = []
+  // Sample first 20 bars to detect timeframe (bar.time is already in ms)
   for (let i = 1; i < Math.min(bars.length, 20); i++) {
-    const diff = (bars[i].time - bars[i - 1].time) * 1000 // convert to ms
+    const diff = bars[i].time - bars[i - 1].time  // Already in ms, no conversion needed
     intervals.push(diff)
   }
 
@@ -147,14 +257,27 @@ export function detectTimeframe(bars) {
   )
 
   const ms = parseInt(mostCommon)
-  if (ms === 60000) return '1m'
-  if (ms === 300000) return '5m'
-  if (ms === 900000) return '15m'
-  if (ms === 1800000) return '30m'
-  if (ms === 3600000) return '1h'
-  if (ms === 14400000) return '4h'
-  if (ms === 86400000) return '1d'
+  // Common timeframe intervals in milliseconds
+  const ONE_MIN = 60 * 1000        // 60,000 ms
+  const FIVE_MIN = 5 * ONE_MIN     // 300,000 ms
+  const FIFTEEN_MIN = 15 * ONE_MIN // 900,000 ms
+  const THIRTY_MIN = 30 * ONE_MIN  // 1,800,000 ms
+  const ONE_HOUR = 60 * ONE_MIN    // 3,600,000 ms
+  const FOUR_HOUR = 4 * ONE_HOUR   // 14,400,000 ms
+  const ONE_DAY = 24 * ONE_HOUR   // 86,400,000 ms
 
+  // Check with a small tolerance (within 5%) for slight irregularities
+  const tolerance = ms * 0.05
+
+  if (Math.abs(ms - ONE_MIN) <= tolerance) return '1m'
+  if (Math.abs(ms - FIVE_MIN) <= tolerance) return '5m'
+  if (Math.abs(ms - FIFTEEN_MIN) <= tolerance) return '15m'
+  if (Math.abs(ms - THIRTY_MIN) <= tolerance) return '30m'
+  if (Math.abs(ms - ONE_HOUR) <= tolerance) return '1h'
+  if (Math.abs(ms - FOUR_HOUR) <= tolerance) return '4h'
+  if (Math.abs(ms - ONE_DAY) <= tolerance) return '1d'
+
+  console.warn(`[detectTimeframe] Unknown interval: ${ms}ms (${(ms / 1000).toFixed(1)}s). Defaulting to 1h.`)
   return '1h'
 }
 

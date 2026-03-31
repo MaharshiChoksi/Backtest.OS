@@ -285,7 +285,19 @@ Everything stays on your machine. Your data never leaves your browser. We cache 
 
 ## Version History
 
-**V3.0** (Current)
+**V3.1** (Current)
+- **Timezone Selection**: Configure the timezone of your data source for accurate session detection
+  - MT4/MT5 brokers often use broker server time (GMT+2 or GMT+3) rather than UTC
+  - Select your data's timezone during configuration to enable future session-based features
+  - Supports 40+ timezones worldwide
+  - Bars are internally stored in UTC for consistent processing
+  - Timezone info stored with symbol config for session-based indicators (London, NY, Tokyo sessions)
+- **Early Termination Optimization**: Large file processing now stops early when bar limit is reached
+  - Web Worker and main-thread paths both support early termination
+  - Won't process millions of unnecessary rows when MAX_BARS (1M) limit is hit
+  - Significant performance improvement for large datasets
+
+**V3.0**
 - **Web Worker Data Processing**: Large CSV files parsed in background thread—no UI lag
 - **Data Parsing Progress Bar**: Visual feedback during file upload and processing
 - **Binary IndexedDB Cache**: ~10-50x faster cache loads using Float64Array storage

@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState } from 'react'
+import { useRef, useMemo, useState, useEffect } from 'react'
 import { useTheme } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
 import { useTradeStore } from '../../store/useTradeStore'
@@ -184,6 +184,19 @@ export function Workspace({ onLoadNew }) {
     primaryTF,
     rsiR,
   })
+
+  // Initialize charts when workspace loads or bars change
+  // This ensures cursor position is reflected in the chart
+  const initRef = useRef(false)
+  useEffect(() => {
+    if (bars.length > 0 && !initRef.current) {
+      initRef.current = true
+      // Small delay to ensure chart refs are ready
+      setTimeout(() => {
+        seekTo(useSimStore.getState().cursor)
+      }, 50)
+    }
+  }, [bars.length, seekTo])
 
   const handleReset = () => {
     // Write to store directly — no reactive reads here, no stale closures
