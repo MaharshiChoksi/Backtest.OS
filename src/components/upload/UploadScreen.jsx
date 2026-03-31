@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useTheme } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
 import { FONT } from '../../constants'
-import { parseDelimited, parseParquet, parseCSVWithWorker, cacheData, loadCachedData, detectMapping, rowToBar } from '../../utils/parser'
+import { parseDelimited, parseDelimitedAsync, parseParquet, parseCSVWithWorker, cacheData, loadCachedData, detectMapping, rowToBar, convertBarTimezone, rowsToBarsLimited, validateTimeIntervals, convertBarsTimezone } from '../../utils/parser'
 import { generateSampleBars } from '../../utils/format'
 import { searchSymbol, getAccountDefaults } from '../../utils/symbolUtils'
 import { detectTimeframe, aggregateBars, getTimeframeMs } from '../../utils/tradingUtils'
@@ -16,6 +16,51 @@ const STEPS = {
 }
 
 const MAX_BARS = 1_000_000  // Maximum bars to load (1 million) for performance with 3 multi-timeframe charts
+
+// Timezone options for data source
+// Default is UTC, but MT4/MT5 brokers often use broker server time (e.g., GMT+2 or GMT+3)
+// This affects how bars are displayed and future session-based features (LONDON, NY, TOKYO sessions, etc.)
+export const TIMEZONE_OPTIONS = [
+  // UTC
+  { label: 'UTC (GMT+0)', value: 0 },
+  
+  // European Timezones
+  { label: 'GMT+1 (London Winter)', value: 1 },
+  { label: 'GMT+2 (Cairo/Moscow)', value: 2 },
+  { label: 'GMT+3 (Moscow/Istanbul)', value: 3 },
+  { label: 'GMT+4 (Dubai)', value: 4 },
+  
+  // Asian Timezones
+  { label: 'GMT+5 (Karachi)', value: 5 },
+  { label: 'GMT+5:30 (Kolkata/Delhi)', value: 5.5 },
+  { label: 'GMT+5:45 (Kathmandu)', value: 5.75 },
+  { label: 'GMT+6 (Dhaka)', value: 6 },
+  { label: 'GMT+6:30 (Yangon)', value: 6.5 },
+  { label: 'GMT+7 (Bangkok/Jakarta)', value: 7 },
+  { label: 'GMT+8 (Singapore/HK/Beijing)', value: 8 },
+  { label: 'GMT+9 (Tokyo/Seoul)', value: 9 },
+  { label: 'GMT+9:30 (Adelaide)', value: 9.5 },
+  { label: 'GMT+10 (Sydney/Brisbane)', value: 10 },
+  { label: 'GMT+11 (Solomon Islands)', value: 11 },
+  { label: 'GMT+12 (Auckland)', value: 12 },
+  { label: 'GMT+13 (Fiji Summer)', value: 13 },
+  { label: 'GMT+14 (Kiribati)', value: 14 },
+  
+  // American Timezones
+  { label: 'GMT-1 (Azores)', value: -1 },
+  { label: 'GMT-2 (Mid-Atlantic)', value: -2 },
+  { label: 'GMT-3 (São Paulo/Buenos Aires)', value: -3 },
+  { label: 'GMT-3:30 (Newfoundland)', value: -3.5 },
+  { label: 'GMT-4 (Halifax/Santiago)', value: -4 },
+  { label: 'GMT-5 (New York/Toronto)', value: -5 },
+  { label: 'GMT-6 (Chicago/Mexico City)', value: -6 },
+  { label: 'GMT-7 (Denver/Phoenix)', value: -7 },
+  { label: 'GMT-8 (Los Angeles/Seattle)', value: -8 },
+  { label: 'GMT-9 (Alaska)', value: -9 },
+  { label: 'GMT-10 (Hawaii)', value: -10 },
+  { label: 'GMT-11 (American Samoa)', value: -11 },
+  { label: 'GMT-12 (Baker Island)', value: -12 },
+]
 
 export function UploadScreen() {
   const C = useTheme()
@@ -60,6 +105,9 @@ export function UploadScreen() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   
+  // Timezone state - default UTC
+  const [selectedTimezone, setSelectedTimezone] = useState(0)  // Offset in hours from UTC
+  
   // Timeframe options (must match getTimeframeMs format): lowercase like '1m', '5m', etc
   const TIMEFRAME_OPTIONS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
   const tfDisplayMap = { '1m': 'M1', '5m': 'M5', '15m': 'M15', '30m': 'M30', '1h': 'H1', '4h': 'H4', '1d': 'D1' }
@@ -100,11 +148,15 @@ export function UploadScreen() {
           setProgress(15)
           try {
             const parseResult = await parseCSVWithWorker(text, {
+              maxBars: MAX_BARS,  // Early termination - don't process more than we need
               onProgress: (p) => {
                 // Map worker progress (0-100) to overall progress (15-75%)
                 const mappedProgress = 15 + Math.round((p.percent || 0) * 0.6)
                 setProgress(mappedProgress)
-                setStatus(`${p.message} ${p.percent}%`)
+                // Show bar count in progress message
+                const barInfo = p.barsFound ? ` (${p.barsFound.toLocaleString()} bars)` : ''
+                const earlyInfo = p.stoppedEarly ? ' [LIMIT REACHED]' : ''
+                setStatus(`${p.message} ${p.percent}%${barInfo}${earlyInfo}`)
               }
             })
             setProgress(75)
@@ -114,18 +166,35 @@ export function UploadScreen() {
             if (parseResult.bars) {
               bars.current = parseResult.bars
             }
+            // Track if we stopped early due to maxBars limit
+            if (parseResult.stoppedEarly) {
+              setBarLimitReached(true)
+              console.log(`⚡ Worker stopped early: processed ${parseResult.rowCount.toLocaleString()} rows, kept ${parseResult.barCount.toLocaleString()} bars (MAX_BARS: ${MAX_BARS.toLocaleString()})`)
+            }
             // Store worker result for later use
             setWorkerResult(parseResult)
           } catch (err) {
             console.error('Worker parsing failed, falling back to main thread:', err)
             setStatus('Falling back to standard parsing...')
-            result = parseDelimited(text)
+            setProgress(15)
+            result = await parseDelimitedAsync(text, {
+              onProgress: (percent) => {
+                // Map 15-60% for this phase
+                setProgress(15 + Math.round(percent * 0.45))
+              }
+            })
             setProgress(60)
           }
         } else {
           setStatus('Parsing CSV...')
-          setProgress(20)
-          result = parseDelimited(text)
+          setProgress(15)
+          // Use async parsing for progress updates
+          result = await parseDelimitedAsync(text, {
+            onProgress: (percent) => {
+              // Map 15-60% for this phase
+              setProgress(15 + Math.round(percent * 0.45))
+            }
+          })
           setProgress(60)
         }
       }
@@ -173,6 +242,7 @@ export function UploadScreen() {
       setProcessing(true)
 
       let validatedBars
+      let stoppedEarly = false
       
       // If we have pre-parsed bars from Web Worker, filter them by the mapping
       if (workerResult && workerResult.bars && workerResult.bars.length > 0) {
@@ -184,17 +254,34 @@ export function UploadScreen() {
           .filter((b, i, arr) => i === 0 || b.time !== arr[i - 1].time)
         setProgress(50)
       } else {
-        // Fall back to main-thread parsing
+        // Fall back to main-thread parsing with early termination
         setStatus('Converting rows to bars...')
         setProgress(25)
-        validatedBars = parsed.rows
-          .map((r) => rowToBar(r, mapping))
-          .filter(Boolean)
+        
+        // Use rowsToBarsLimited for early termination - stops when MAX_BARS reached
+        const result = await rowsToBarsLimited(parsed.rows, mapping, {
+          maxBars: MAX_BARS,
+          onProgress: (percent) => {
+            // Map 25-45% for this phase
+            setProgress(25 + Math.round(percent * 0.2))
+          }
+        })
+        
+        validatedBars = result.bars
           .sort((a, b) => a.time - b.time)
-        setProgress(40)
+        setProgress(45)
+        
+        // Remove duplicates
         const unique = validatedBars.filter((b, i) => i === 0 || b.time !== validatedBars[i - 1].time)
         validatedBars = unique
         setProgress(50)
+        
+        // Track if we stopped early
+        stoppedEarly = result.stoppedEarly
+        if (stoppedEarly) {
+          setBarLimitReached(true)
+          console.log(`⚡ Main-thread stopped early: processed ${result.totalProcessed.toLocaleString()} rows, kept ${validatedBars.length.toLocaleString()} bars (MAX_BARS: ${MAX_BARS.toLocaleString()})`)
+        }
       }
 
       if (validatedBars.length < 20) {
@@ -207,12 +294,14 @@ export function UploadScreen() {
 
       setStatus('Validating time intervals...')
       setProgress(55)
-      // Validate minimum 1-minute bar interval (reject tick data or data closer than 60 seconds)
-      let minInterval = Infinity
-      for (let i = 1; i < validatedBars.length; i++) {
-        const interval = validatedBars[i].time - validatedBars[i - 1].time
-        minInterval = Math.min(minInterval, interval)
-      }
+      
+      // Validate minimum 1-minute bar interval asynchronously (reject tick data)
+      const { minInterval } = await validateTimeIntervals(validatedBars, {
+        onProgress: (percent) => {
+          // Map 55-65% for this phase
+          setProgress(55 + Math.round(percent * 0.1))
+        }
+      })
 
       const MIN_INTERVAL_MS = 60000 // 1 minute
       if (minInterval < MIN_INTERVAL_MS) {
@@ -226,19 +315,44 @@ export function UploadScreen() {
       setProgress(65)
       // Enforce bar limit for performance (loading 3 multi-timeframe charts simultaneously)
       let finalBars = validatedBars
-      let hitBarLimit = false
       if (validatedBars.length > MAX_BARS) {
         finalBars = validatedBars.slice(0, MAX_BARS)
-        hitBarLimit = true
         setBarLimitReached(true)
+      }
+      
+      // Apply timezone conversion to bars asynchronously (if not UTC)
+      // Convert from data timezone to UTC for storage
+      if (selectedTimezone !== 0) {
+        setStatus('Converting timezone...')
+        setProgress(67)
+        finalBars = await convertBarsTimezone(finalBars, selectedTimezone, {
+          onProgress: (percent) => {
+            // Map 67-75% for this phase
+            setProgress(67 + Math.round(percent * 0.08))
+          }
+        })
       }
 
       bars.current = finalBars
+      console.log('[Upload] Starting cache for', finalBars.length, 'bars')
+      console.log('[Upload] parsed.headers:', parsed?.headers?.length, 'parsed.rows:', parsed?.rows?.length)
       setStatus('Caching data...')
       setProgress(75)
       
+      // Force a re-render before starting the heavy work
+      await new Promise(r => setTimeout(r, 50))
+      
       // Cache with binary format for faster reload
-      await cacheData(fileName, parsed.headers, parsed.rows, finalBars, { useBinary: true })
+      await cacheData(fileName, parsed.headers, parsed.rows, finalBars, { 
+        useBinary: true,
+        onProgress: (p) => {
+          console.log('[Upload] Cache progress:', p.percent, '%', p.message)
+          // Map 75-95% for caching phase
+          setProgress(75 + Math.round((p.percent || 0) * 0.2))
+          if (p.message) setStatus(p.message)
+        }
+      })
+      console.log('[Upload] Cache complete')
       setProgress(95)
       
       setProgress(100)
@@ -296,6 +410,10 @@ export function UploadScreen() {
     const detected = detectTimeframe(bars.current)
     setDetectedTimeframe(detected)
     setSelectedTimeframe(detected)
+    setSelectedTimeframes([detected])
+    
+    // Reset timezone to default (UTC) when confirming symbol
+    setSelectedTimezone(0)
     setSelectedTimeframes([detected])
 
     if (bars.current.length > 0) {
@@ -362,7 +480,14 @@ export function UploadScreen() {
         return
       }
       
-      setSymbolConfig(symbolConfig)
+      // Add timezone to symbolConfig
+      const configWithTimezone = {
+        ...symbolConfig,
+        timezone: selectedTimezone,  // Offset in hours from UTC
+        timezoneLabel: TIMEZONE_OPTIONS.find(tz => tz.value === selectedTimezone)?.label || 'UTC',
+      }
+      
+      setSymbolConfig(configWithTimezone)
       setAccountConfig(accountForm)
       
       setStatus('📊 Filtering data by date range...')
@@ -430,7 +555,17 @@ export function UploadScreen() {
 
       setStatus('🚀 Loading session...')
       setTimeframe(tfDisplayMap[selectedTimeframes[0]] || selectedTimeframes[0])  // Set with display format
-      useSimStore.getState().loadMultiTimeframeSession(barsMap, selectedTimeframes.map(tf => tfDisplayMap[tf] || tf), fileName)
+      
+      // Get timezone info
+      const timezoneLabel = TIMEZONE_OPTIONS.find(tz => tz.value === selectedTimezone)?.label || 'UTC'
+      
+      useSimStore.getState().loadMultiTimeframeSession(
+        barsMap, 
+        selectedTimeframes.map(tf => tfDisplayMap[tf] || tf), 
+        fileName,
+        selectedTimezone,  // timezone offset in hours
+        timezoneLabel  // display label
+      )
       
       console.log('✅ Backtest started successfully!')
       setStatus('')
@@ -1131,6 +1266,55 @@ export function UploadScreen() {
                     style={{ ...inp }}
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Timezone Selection */}
+            <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div>
+                  <span style={head}>Data Timezone</span>
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
+                    Select the timezone of your data source (MT4/MT5 usually uses broker server time)
+                  </div>
+                </div>
+                <div style={{
+                  background: C.amber + '15',
+                  border: `1px solid ${C.amber}40`,
+                  borderRadius: 4,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  color: C.amber,
+                  fontWeight: 600,
+                }}>
+                  {TIMEZONE_OPTIONS.find(tz => tz.value === selectedTimezone)?.label || 'GMT+3 (Moscow/Istanbul)'}
+                </div>
+              </div>
+              <select
+                value={selectedTimezone}
+                onChange={(e) => setSelectedTimezone(Number(e.target.value))}
+                style={{
+                  ...inp,
+                  cursor: 'pointer',
+                  width: '100%',
+                  fontSize: 13,
+                }}
+              >
+                {TIMEZONE_OPTIONS.map((tz) => (
+                  <option key={tz.value} value={tz.value}>
+                    {tz.label} (UTC{tz.value >= 0 ? '+' : ''}{tz.value})
+                  </option>
+                ))}
+              </select>
+              <div style={{
+                marginTop: 8,
+                padding: '8px 10px',
+                background: C.surf2,
+                borderRadius: 4,
+                fontSize: 10,
+                color: C.muted,
+              }}>
+                💡 <strong>MT4/MT5:</strong> Default is usually GMT+2 or GMT+3 (broker server time). DST is handled automatically by MT5.
               </div>
             </div>
 

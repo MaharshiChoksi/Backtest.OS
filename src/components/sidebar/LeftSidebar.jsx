@@ -32,6 +32,7 @@ function InfoTab() {
   const trades   = useTradeStore((s) => s.trades)
   const symbolConfig = useSimStore((s) => s.symbolConfig)
   const accountConfig = useSimStore((s) => s.accountConfig)
+  const tz = useSimStore((s) => s.timezoneLabel)
 
   const currentBar = bars[cursor - 1]
   const openTrades  = useMemo(() => trades.filter((t) => t.status === 'open'),   [trades])
@@ -97,6 +98,7 @@ function InfoTab() {
           <Kv label="Starting"    value={`$${(accountConfig.starting_balance || 0).toLocaleString()}`} />
           <Kv label="Balance"     value={`$${currentBalance.toLocaleString()}`} color={currentBalance >= accountConfig.starting_balance ? C.green : C.red} />
           <Kv label="Return"      value={`${returnPercent}%`} color={returnPercent >= 0 ? C.green : C.red} />
+          <Kv label="Timezone"    value={tz} />
           <Divider />
         </>
       )}

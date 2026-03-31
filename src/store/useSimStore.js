@@ -13,6 +13,8 @@ export const useSimStore = create((set, get) => ({
   symbolConfig: null,
   accountConfig: null,
   timeframe: '1h',
+  timezone: 0,  // Offset in hours from UTC (e.g., 3 for GMT+3)
+  timezoneLabel: 'UTC',  // Display label (e.g., 'GMT+3')
   
   // Multi-timeframe support
   selectedTimeframes: ['1h'],
@@ -23,7 +25,7 @@ export const useSimStore = create((set, get) => ({
     set({ bars, fileName, cursor: Math.min(30, bars.length), playing: false, analysisMode: false }),
   
   /** Load multi-timeframe session */
-  loadMultiTimeframeSession: (barsMap, selectedTimeframes, fileName) =>
+  loadMultiTimeframeSession: (barsMap, selectedTimeframes, fileName, timezone = 0, timezoneLabel = 'UTC') =>
     set({ 
       bars: barsMap[selectedTimeframes[0]] || [],  // Set bars to first timeframe for navigation
       barsMap, 
@@ -32,6 +34,8 @@ export const useSimStore = create((set, get) => ({
       cursor: Math.min(30, barsMap[selectedTimeframes[0]]?.length || 0), 
       playing: false,
       analysisMode: false,
+      timezone,
+      timezoneLabel,
     }),
 
   /** Set symbol configuration */

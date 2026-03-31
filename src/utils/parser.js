@@ -79,6 +79,59 @@ export function parseDelimited(text) {
 }
 
 /**
+ * Parse delimited text asynchronously with progress reporting
+ * Yields to event loop periodically to allow UI updates
+ * @param {string} text - Raw text content
+ * @param {Object} options - Options
+ * @param {number} options.chunkSize - Rows per chunk before yielding (default: 5000)
+ * @param {Function} options.onProgress - Progress callback (percent: number)
+ * @returns {Promise<{headers: Array, rows: Array}>}
+ */
+export async function parseDelimitedAsync(text, options = {}) {
+  const { chunkSize = 5000, onProgress } = options
+  
+  // Split lines synchronously (fast)
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().split('\n').filter(Boolean)
+  if (lines.length < 2) return null
+
+  // Detect delimiter synchronously
+  const first = lines[0]
+  let delim = ',', best = 0
+  for (const d of [',', '\t', ';', '|']) {
+    const n = first.split(d).length - 1
+    if (n > best) { best = n; delim = d }
+  }
+
+  const clean = (s) => s.trim().replace(/^["']|["']$/g, '')
+  const headers = first.split(delim).map(clean)
+  
+  // Process rows in chunks, yielding to event loop between chunks
+  const rows = []
+  const rawRows = lines.slice(1)
+  const total = rawRows.length
+  
+  for (let i = 0; i < rawRows.length; i += chunkSize) {
+    const chunk = rawRows.slice(i, i + chunkSize)
+    
+    for (const l of chunk) {
+      const o = {}
+      l.split(delim).map(clean).forEach((v, j) => { if (headers[j]) o[headers[j]] = v })
+      if (headers.some(h => o[h])) rows.push(o)
+    }
+    
+    // Report progress and yield to event loop
+    if (onProgress) {
+      onProgress(Math.min(Math.round(((i + chunk.length) / total) * 100), 100))
+    }
+    
+    // Yield to allow UI to update
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  
+  return { headers, rows }
+}
+
+/**
  * Parse Parquet file using Apache Arrow (for reading Parquet files users provide).
  */
 export async function parseParquet(arrayBuffer) {
@@ -132,30 +185,36 @@ export async function cacheData(fileName, headers, rows, bars, options = {}) {
 
     const timestamp = Date.now()
     
-    // Store metadata (headers, row count, etc.)
+    // Store metadata first (separate transaction)
     const metadata = { 
       name: fileName, 
       headers, 
-      rowCount: rows.length,
+      rowCount: rows ? rows.length : 0,
       timestamp,
       useBinary: useBinary && bars && bars.length > 0
     }
     
-    const tx = db.transaction(['metadata', 'bars'], 'readwrite')
-    const metaStore = tx.objectStore('metadata')
-    
     await new Promise((resolve, reject) => {
-      const req = metaStore.put(metadata)
+      const tx = db.transaction('metadata', 'readwrite')
+      const store = tx.objectStore('metadata')
+      const req = store.put(metadata)
       req.onsuccess = resolve
-      req.onerror = reject
+      req.onerror = () => reject(req.error)
     })
 
-    // Store bars (either as binary or JSON)
+    // Store bars (either as binary or JSON) - separate transaction
     if (useBinary && bars && bars.length > 0) {
-      if (onProgress) onProgress({ phase: 'caching', message: 'Storing binary data...' })
+      console.log(`[Cache] Starting binary cache for ${bars.length} bars`)
+      if (onProgress) {
+        onProgress({ phase: 'caching', message: 'Preparing data...', percent: 0 })
+        await new Promise(r => setTimeout(r, 10)) // Small delay to let UI update
+      }
       
-      // Convert bars to Float64Array for efficient storage
+      // Convert bars to Float64Array for efficient storage (async chunked)
       const binaryData = new Float64Array(bars.length * 6)
+      console.log(`[Cache] Float64Array created, byteLength: ${binaryData.byteLength}`)
+      const chunkSize = 1000  // Process 1k bars at a time for smoother progress
+      
       for (let i = 0; i < bars.length; i++) {
         const b = bars[i]
         const idx = i * 6
@@ -165,39 +224,55 @@ export async function cacheData(fileName, headers, rows, bars, options = {}) {
         binaryData[idx + 3] = b.low
         binaryData[idx + 4] = b.close
         binaryData[idx + 5] = b.volume
+        
+        // Yield to event loop periodically to keep UI responsive and show progress
+        if (i > 0 && i % chunkSize === 0) {
+          const percent = Math.round((i / bars.length) * 100)
+          if (onProgress) {
+            onProgress({ phase: 'caching', message: `Converting... ${percent}%`, percent })
+          }
+          await new Promise(r => setTimeout(r, 0)) // Yield to event loop
+        }
       }
       
-      const barStore = tx.objectStore('bars')
+      console.log(`[Cache] Conversion done, saving to IndexedDB...`)
+      if (onProgress) onProgress({ phase: 'caching', message: 'Saving...', percent: 95 })
+      
+      // Create NEW transaction for bars (old one is already committed)
       await new Promise((resolve, reject) => {
-        const req = barStore.put({
+        const tx = db.transaction('bars', 'readwrite')
+        const store = tx.objectStore('bars')
+        const req = store.put({
           name: fileName,
           data: binaryData.buffer,  // ArrayBuffer
           barCount: bars.length,
           timestamp
         })
         req.onsuccess = resolve
-        req.onerror = reject
+        req.onerror = () => reject(req.error)
       })
       
       console.log(`📦 Cached ${bars.length} bars for ${fileName} (binary: ${(binaryData.byteLength / 1024).toFixed(2)} KB)`)
-    } else {
-      // Fallback to JSON
-      const barStore = tx.objectStore('bars')
+    } else if (bars && bars.length > 0) {
+      // Fallback to JSON - create new transaction
       await new Promise((resolve, reject) => {
-        const req = barStore.put({
+        const tx = db.transaction('bars', 'readwrite')
+        const store = tx.objectStore('bars')
+        const req = store.put({
           name: fileName,
           data: JSON.stringify(bars),
           barCount: bars.length,
           timestamp
         })
         req.onsuccess = resolve
-        req.onerror = reject
+        req.onerror = () => reject(req.error)
       })
       
       console.log(`📦 Cached ${bars?.length || 0} bars for ${fileName} (JSON)`)
     }
   } catch (error) {
-    console.error('Cache error:', error)
+    console.error('[Cache] Error:', error)
+    throw error  // Re-throw so caller knows caching failed
   }
 }
 
@@ -395,16 +470,157 @@ export function rowToBar(row, mapping) {
       }
     }
   }
-  
+   
   const time = parseTS(timeStr)
   if (!time) return null
-  
+   
   const o = parseFloat(row[mapping.open])
   const h = parseFloat(row[mapping.high])
   const l = parseFloat(row[mapping.low])
   const c = parseFloat(row[mapping.close])
   if ([o, h, l, c].some(isNaN)) return null
-  
+   
   const vol = parseFloat(row[mapping.volume] || '0')
   return { time, open: o, high: h, low: l, close: c, volume: isNaN(vol) ? 0 : vol }
+}
+
+/**
+ * Convert bar timestamp from data timezone to UTC
+ * @param {number} timestamp - Timestamp in milliseconds (data timezone)
+ * @param {number} timezoneOffset - Offset in hours from UTC (e.g., 3 for GMT+3)
+ * @returns {number} Timestamp in milliseconds (UTC)
+ */
+export function timestampToUTC(timestamp, timezoneOffset) {
+  if (!timezoneOffset) return timestamp
+  const offsetMs = timezoneOffset * 60 * 60 * 1000
+  return timestamp - offsetMs
+}
+
+/**
+ * Convert bar timestamp from UTC to data timezone
+ * @param {number} timestamp - Timestamp in milliseconds (UTC)
+ * @param {number} timezoneOffset - Offset in hours from UTC (e.g., 3 for GMT+3)
+ * @returns {number} Timestamp in milliseconds (data timezone)
+ */
+export function timestampFromUTC(timestamp, timezoneOffset) {
+  if (!timezoneOffset) return timestamp
+  const offsetMs = timezoneOffset * 60 * 60 * 1000
+  return timestamp + offsetMs
+}
+
+/**
+ * Apply timezone offset to a single bar
+ * @param {Object} bar - Bar object with time property
+ * @param {number} timezoneOffset - Offset in hours from UTC
+ * @returns {Object} Bar with converted timestamp
+ */
+export function convertBarTimezone(bar, timezoneOffset) {
+  return {
+    ...bar,
+    time: timestampToUTC(bar.time, timezoneOffset)
+  }
+}
+
+/**
+ * Convert rows to bars with early termination support
+ * Stops processing once maxBars valid bars have been found
+ * Yields to event loop periodically for UI responsiveness
+ * @param {Array} rows - Array of row objects
+ * @param {Object} mapping - Column mapping
+ * @param {Object} options - Options
+ * @param {number} options.maxBars - Stop after this many valid bars (default: Infinity)
+ * @param {Function} options.onProgress - Progress callback (percent)
+ * @returns {Promise<{bars: Array, stoppedEarly: boolean, totalProcessed: number}>}
+ */
+export async function rowsToBarsLimited(rows, mapping, options = {}) {
+  const { maxBars = Infinity, onProgress } = options
+  const bars = []
+  let processed = 0
+  let validCount = 0
+  const total = rows.length
+  const chunkSize = 5000  // Yield every 5k rows
+  
+  for (let i = 0; i < rows.length; i++) {
+    const bar = rowToBar(rows[i], mapping)
+    if (bar) {
+      bars.push(bar)
+      validCount++
+      
+      // Early termination - stop once we have enough bars
+      if (validCount >= maxBars) {
+        if (onProgress) onProgress(100)
+        return { bars, stoppedEarly: true, totalProcessed: i + 1 }
+      }
+    }
+    
+    processed++
+    
+    // Yield to event loop periodically for UI responsiveness
+    if (processed % chunkSize === 0) {
+      if (onProgress) onProgress(Math.min(Math.round((processed / total) * 100), 99))
+      await new Promise(r => setTimeout(r, 0))
+    }
+  }
+  
+  if (onProgress) onProgress(100)
+  return { bars, stoppedEarly: false, totalProcessed: processed }
+}
+
+/**
+ * Validate time intervals asynchronously with progress reporting
+ * @param {Array} bars - Array of bar objects
+ * @param {Object} options - Options
+ * @param {Function} options.onProgress - Progress callback (percent)
+ * @returns {Promise<{minInterval: number, stoppedEarly: boolean}>}
+ */
+export async function validateTimeIntervals(bars, options = {}) {
+  const { onProgress } = options
+  let minInterval = Infinity
+  const chunkSize = 10000
+  
+  for (let i = 1; i < bars.length; i++) {
+    const interval = bars[i].time - bars[i - 1].time
+    if (interval < minInterval) {
+      minInterval = interval
+    }
+    
+    // Yield periodically
+    if (i % chunkSize === 0) {
+      if (onProgress) onProgress(Math.round((i / bars.length) * 100))
+      await new Promise(r => setTimeout(r, 0))
+    }
+  }
+  
+  if (onProgress) onProgress(100)
+  return { minInterval, stoppedEarly: false }
+}
+
+/**
+ * Apply timezone conversion to bars asynchronously
+ * @param {Array} bars - Array of bar objects
+ * @param {number} timezoneOffset - Offset in hours from UTC
+ * @param {Object} options - Options
+ * @param {Function} options.onProgress - Progress callback (percent)
+ * @returns {Promise<Array>} Converted bars
+ */
+export async function convertBarsTimezone(bars, timezoneOffset, options = {}) {
+  const { onProgress } = options
+  const converted = []
+  const chunkSize = 10000
+  
+  for (let i = 0; i < bars.length; i++) {
+    converted.push({
+      ...bars[i],
+      time: timestampToUTC(bars[i].time, timezoneOffset)
+    })
+    
+    // Yield periodically
+    if (i > 0 && i % chunkSize === 0) {
+      if (onProgress) onProgress(Math.round((i / bars.length) * 100))
+      await new Promise(r => setTimeout(r, 0))
+    }
+  }
+  
+  if (onProgress) onProgress(100)
+  return converted
 }
