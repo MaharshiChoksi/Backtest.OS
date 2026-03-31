@@ -57,7 +57,7 @@ function TradesTab() {
   }, [openTrades, currentBar, symbolConfig, accountConfig])
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto', minHeight: 0 }}>
       <TradeForm />
 
       {/* Open positions list */}

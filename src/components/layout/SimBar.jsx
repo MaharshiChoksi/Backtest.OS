@@ -6,7 +6,7 @@ import { fmtDate } from "../../utils/format";
 
 export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
   const C = useThemeStore((s) => s.C);
-  const { cursor, bars, playing, speed, setSpeed, setPlaying, togglePlaying } = useSimStore();
+  const { cursor, bars, playing, speed, setSpeed, setPlaying, togglePlaying, enterAnalysisMode, exitAnalysisMode } = useSimStore();
 
   const [hoverPct, setHoverPct] = useState(null);
   const trackRef = useRef();
@@ -14,9 +14,9 @@ export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
 
   const total = bars.length;
   const currentBar = bars[cursor - 1] ?? null;
+  const progressPct = total > 0 ? (cursor / total) * 100 : 0;
 
   // ── Direct event listeners for pause/step buttons at high speeds ──
-  // These bypass React's event system which gets starved at 5x+ speeds
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -48,22 +48,28 @@ export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
         e.preventDefault();
         useSimStore.getState().setPlaying(false);
         onReset();
+      } else if (action === 'cycle-speed') {
+        e.preventDefault();
+        // Cycle through speeds: 1 -> 5 -> 10 -> 50 -> MAX -> 1
+        const currentIdx = SPEEDS.findIndex(s => s.v === speed)
+        const nextIdx = (currentIdx + 1) % SPEEDS.length
+        setSpeed(SPEEDS[nextIdx].v)
       }
     };
 
-    // Use capture phase so we intercept before React's event system
     container.addEventListener('mousedown', handleMouseDown, true);
     return () => container.removeEventListener('mousedown', handleMouseDown, true);
-  }, [onStepBack, onStepFwd, onSeek, onReset]);
+  }, [onStepBack, onStepFwd, onSeek, onReset, speed, setSpeed]);
 
   const getPct = (e) => {
     const r = trackRef.current.getBoundingClientRect();
     return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
   };
 
-  const CtrlBtn = ({ icon, onClick, primary = false, ...props }) => (
+  const CtrlBtn = ({ icon, onClick, primary = false, dataAction, ...props }) => (
     <button
       onClick={onClick}
+      data-action={dataAction}
       {...props}
       style={{
         background: primary
@@ -72,9 +78,9 @@ export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
         border: `1px solid ${primary ? C.amber : C.border2}`,
         color: primary ? (playing ? C.amber : "#000") : C.muted,
         borderRadius: 5,
-        padding: primary ? "7px 22px" : "7px 12px",
+        padding: primary ? "7px 18px" : "7px 10px",
         cursor: "pointer",
-        fontSize: primary ? 16 : 14,
+        fontSize: primary ? 14 : 13,
         fontFamily: FONT,
         fontWeight: primary ? 700 : 400,
         transition: "all .15s",
@@ -85,41 +91,102 @@ export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
     </button>
   );
 
+  // Get speed label for display
+  const speedLabel = SPEEDS.find(s => s.v === speed)?.label || '1×'
+
   return (
-    <div ref={containerRef} style={{ height: 60, background: C.surf, borderTop: `1px solid ${C.border}`, display: "flex", alignItems: "center", padding: "0 18px", gap: 10, flexShrink: 0, fontFamily: FONT }}>
+    <div ref={containerRef} style={{ 
+      height: 56, 
+      background: C.surf, 
+      borderTop: `1px solid ${C.border}`, 
+      display: "flex", 
+      alignItems: "center", 
+      padding: "0 16px", 
+      gap: 8, 
+      flexShrink: 0, 
+      fontFamily: FONT 
+    }}>
 
       {/* Playback controls */}
-      <CtrlBtn icon="⏮" data-action="seek-start" />
-      <CtrlBtn icon="◀" data-action="step-back" />
-      <CtrlBtn icon={playing ? "⏸" : "▶"} data-action="toggle-play" primary />
-      <CtrlBtn icon="▶|" data-action="step-fwd" />
-      <CtrlBtn icon="⏭" data-action="seek-end" />
+      <CtrlBtn icon="⏮" dataAction="seek-start" title="Go to start" />
+      <CtrlBtn icon="◀" dataAction="step-back" title="Step back" />
+      <CtrlBtn icon={playing ? "⏸" : "▶"} dataAction="toggle-play" primary title={playing ? "Pause" : "Play"} />
+      <CtrlBtn icon="▶|" dataAction="step-fwd" title="Step forward" />
+      <CtrlBtn icon="⏭" dataAction="seek-end" title="Go to end" />
 
-      <div style={{ width: 1, height: 24, background: C.border }} />
+      <div style={{ width: 1, height: 20, background: C.border }} />
 
-      {/* Speed */}
-      <div style={{ display: "flex", gap: 4 }}>
-        {SPEEDS.map(({ label, v }) => (
-          <button key={v} onClick={() => setSpeed(v)} style={{
-            background: speed === v ? C.amber + "20" : "transparent",
-            border: `1px solid ${speed === v ? C.amber : C.border2}`,
-            color: speed === v ? C.amber : C.muted,
-            borderRadius: 4, padding: "4px 8px", cursor: "pointer",
-            fontSize: 12, fontFamily: FONT, transition: "all .15s",
-          }}>
-            {label}
-          </button>
-        ))}
+      {/* Speed control - click to cycle, shows current speed */}
+      <button 
+        data-action="cycle-speed" 
+        onClick={() => {
+          const currentIdx = SPEEDS.findIndex(s => s.v === speed)
+          const nextIdx = (currentIdx + 1) % SPEEDS.length
+          setSpeed(SPEEDS[nextIdx].v)
+        }}
+        title="Click to change speed"
+        style={{
+          background: C.amber + "15",
+          border: `1px solid ${C.amber}60`,
+          color: C.amber,
+          borderRadius: 4,
+          padding: "4px 10px",
+          cursor: "pointer",
+          fontSize: 12,
+          fontFamily: FONT,
+          fontWeight: 600,
+          minWidth: 48,
+          textAlign: 'center',
+          transition: "all .15s",
+        }}
+      >
+        {speedLabel}
+      </button>
+
+      {/* Speed dropdown on hover */}
+      <div style={{ position: 'relative' }}>
+        <div style={{ 
+          display: "flex", 
+          gap: 2,
+          background: C.surf2,
+          borderRadius: 4,
+          padding: 2,
+          border: `1px solid ${C.border2}`,
+        }}>
+          {SPEEDS.map(({ label, v }) => (
+            <button 
+              key={v} 
+              onClick={() => setSpeed(v)} 
+              style={{
+                background: speed === v ? C.amber + "20" : "transparent",
+                border: `1px solid ${speed === v ? C.amber : 'transparent'}`,
+                color: speed === v ? C.amber : C.muted,
+                borderRadius: 3, 
+                padding: "3px 6px", 
+                cursor: "pointer",
+                fontSize: 10, 
+                fontFamily: FONT, 
+                fontWeight: speed === v ? 600 : 400,
+                transition: "all .15s",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div style={{ width: 1, height: 24, background: C.border }} />
+      <div style={{ width: 1, height: 20, background: C.border }} />
 
       {/* Bar counter */}
-      <span style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>{cursor.toLocaleString()}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+        <span style={{ color: C.text, fontSize: 11, fontWeight: 600 }}>{cursor.toLocaleString()}</span>
+        <span style={{ color: C.dim, fontSize: 9 }}>/ {total.toLocaleString()}</span>
+      </div>
 
       {/* Progress track */}
       <div
-        style={{ flex: 1, position: "relative", cursor: "pointer" }}
+        style={{ flex: 1, position: "relative", cursor: "pointer", margin: "0 8px" }}
         onMouseMove={(e) => setHoverPct(getPct(e))}
         onMouseLeave={() => setHoverPct(null)}
         onClick={(e) => {
@@ -129,37 +196,133 @@ export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
       >
         {hoverPct !== null && (
           <div style={{
-            position: "absolute", bottom: "calc(100% + 8px)",
-            left: `${hoverPct * 100}%`, transform: "translateX(-50%)",
-            background: C.surf2, border: `1px solid ${C.border2}`,
-            borderRadius: 4, padding: "3px 8px", fontSize: 11,
-            color: C.text, whiteSpace: "nowrap", pointerEvents: "none",
+            position: "absolute", 
+            bottom: "calc(100% + 6px)",
+            left: `${hoverPct * 100}%`, 
+            transform: "translateX(-50%)",
+            background: C.surf2, 
+            border: `1px solid ${C.border2}`,
+            borderRadius: 4, 
+            padding: "2px 6px", 
+            fontSize: 10,
+            color: C.text, 
+            whiteSpace: "nowrap", 
+            pointerEvents: "none",
+            zIndex: 100,
           }}>
             Bar {Math.round(hoverPct * total).toLocaleString()}
           </div>
         )}
-        <div ref={trackRef} style={{ height: 4, background: C.surf3, borderRadius: 2, overflow: "hidden" }}>
+        <div 
+          ref={trackRef} 
+          style={{ 
+            height: 6, 
+            background: C.surf3, 
+            borderRadius: 3, 
+            overflow: "hidden",
+            position: 'relative',
+          }}
+        >
+          {/* Progress fill */}
           <div style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
             height: "100%",
-            width: `${(cursor / total) * 100}%`,
+            width: `${progressPct}%`,
+            background: playing 
+              ? `linear-gradient(90deg, ${C.amber}CC, ${C.amber})`
+              : C.amber,
+            borderRadius: 3,
+            transition: playing ? "none" : "width .2s ease-out",
+            boxShadow: playing ? `0 0 8px ${C.amber}60` : 'none',
+          }} />
+          
+          {/* Cursor indicator */}
+          <div style={{
+            position: 'absolute',
+            left: `${progressPct}%`,
+            top: '-2px',
+            width: 2,
+            height: 'calc(100% + 4px)',
             background: C.amber,
-            borderRadius: 2,
-            transition: playing ? "none" : "width .1s",
+            transform: 'translateX(-50%)',
+            boxShadow: `0 0 4px ${C.amber}`,
           }} />
         </div>
       </div>
 
-      <span style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>{total.toLocaleString()}</span>
-
-      <div style={{ width: 1, height: 24, background: C.border }} />
-
+      {/* Current bar time */}
       {currentBar && (
-        <span style={{ color: C.muted, fontSize: 10, flexShrink: 0 }}>{fmtDate(currentBar.time)}</span>
+        <span style={{ 
+          color: C.muted, 
+          fontSize: 10, 
+          flexShrink: 0,
+          background: C.surf2,
+          padding: '2px 6px',
+          borderRadius: 3,
+          border: `1px solid ${C.border2}`,
+        }}>
+          {fmtDate(currentBar.time)}
+        </span>
       )}
 
+      <div style={{ width: 1, height: 20, background: C.border }} />
+
       {/* Reset */}
-      <button data-action="reset" style={{ background: "transparent", border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "5px 12px", cursor: "pointer", fontSize: 10, fontFamily: FONT, flexShrink: 0 }}>
+      <button 
+        data-action="reset" 
+        title="Reset to bar 30"
+        style={{ 
+          background: "transparent", 
+          border: `1px solid ${C.border2}`, 
+          color: C.muted, 
+          borderRadius: 4, 
+          padding: "4px 10px", 
+          cursor: "pointer", 
+          fontSize: 10, 
+          fontFamily: FONT, 
+          flexShrink: 0,
+          transition: "all .15s",
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.borderColor = C.amber}
+        onMouseLeave={(e) => e.currentTarget.style.borderColor = C.border2}
+      >
         ↺ Reset
+      </button>
+
+      {/* Exit to Analysis Mode - clears market data but keeps journal */}
+      <button 
+        onClick={() => {
+          // Stop playing first
+          useSimStore.getState().setPlaying(false)
+          // Then enter analysis mode
+          enterAnalysisMode()
+        }}
+        title="Stop backtest and view analysis (keeps journal)"
+        style={{ 
+          background: C.red + "15", 
+          border: `1px solid ${C.red}50`, 
+          color: C.red, 
+          borderRadius: 4, 
+          padding: "6px 12px", 
+          cursor: "pointer", 
+          fontSize: 10, 
+          fontFamily: FONT, 
+          fontWeight: 600,
+          flexShrink: 0,
+          transition: "all .15s",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = C.red + "30"
+          e.currentTarget.style.borderColor = C.red
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = C.red + "15"
+          e.currentTarget.style.borderColor = C.red + "50"
+        }}
+      >
+        ■ Stop & Analyze
       </button>
     </div>
   );

@@ -9,7 +9,7 @@ import { fmt, fmtPnl, fmtDate } from "../../utils/format";
 export function Header({ onReset, hoverBar }) {
   const C             = useThemeStore((s) => s.C);
   const { theme, toggleTheme } = useThemeStore();
-  const { bars, cursor, fileName, symbolConfig, accountConfig } = useSimStore();
+  const { bars, cursor, fileName, symbolConfig, accountConfig, exitAnalysisMode } = useSimStore();
   const { trades }    = useTradeStore();
 
   const currentBar  = bars[cursor - 1];
@@ -54,8 +54,27 @@ export function Header({ onReset, hoverBar }) {
   return (
     <div style={{ height: 46, background: C.surf, borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", padding: "0 16px", gap: 10, flexShrink: 0, fontFamily: FONT, userSelect: "none" }}>
 
-      {/* Brand */}
-      <button onClick={onReset} style={{ color: C.amber, fontWeight: 700, letterSpacing: 3, fontSize: 15, background: "none", border: "none", cursor: "pointer", fontFamily: FONT, padding: 0, flexShrink: 0 }}>
+      {/* Brand - Click to go to upload screen */}
+      <button 
+        onClick={() => exitAnalysisMode()} 
+        title="Back to Upload Screen"
+        style={{ 
+          color: C.amber, 
+          fontWeight: 700, 
+          letterSpacing: 3, 
+          fontSize: 15, 
+          background: "none", 
+          border: "none", 
+          cursor: "pointer", 
+          fontFamily: FONT, 
+          padding: 0, 
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <span style={{ color: C.muted, fontSize: 11 }}>←</span>
         BACKTEST<span style={{ color: C.muted }}>.</span>OS
       </button>
       <div style={V} />

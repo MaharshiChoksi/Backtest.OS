@@ -24,6 +24,7 @@ export function JournalTab() {
   const accountConfig = useSimStore((s) => s.accountConfig)
   const trades    = useTradeStore((s) => s.trades)
   const modifyTrade = useTradeStore((s) => s.modifyTrade)
+  const resetTrades = useTradeStore((s) => s.reset)  // Reset trades too
   const entries   = useJournalStore((s) => s.entries)
   const syncOpenTrade = useJournalStore((s) => s.syncOpenTrade)
   const syncClosedTrade = useJournalStore((s) => s.syncClosedTrade)
@@ -31,7 +32,7 @@ export function JournalTab() {
   const updateTradeDetails = useJournalStore((s) => s.updateTradeDetails)
   const removeEntry = useJournalStore((s) => s.removeEntry)
   const exportCSV = useJournalStore((s) => s.exportCSV)
-  const reset = useJournalStore((s) => s.reset)
+  const resetJournal = useJournalStore((s) => s.reset)
 
   const currentBar = bars[cursor - 1]
 
@@ -105,7 +106,10 @@ export function JournalTab() {
                 if (!confirmClear) {
                   setConfirmClear(true)
                 } else {
-                  reset()
+                  // Reset BOTH trade store AND journal store
+                  // Journal is synced from trades, so both must be cleared
+                  resetTrades()  // Clear trades first
+                  resetJournal()  // Then clear journal entries
                   setConfirmClear(false)
                 }
               }}

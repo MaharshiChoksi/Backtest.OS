@@ -13,6 +13,7 @@ import { MultiChartPane } from '../chart/MultiChartPane'
 import { RsiPane } from '../chart/RsiPane'
 import { RightPanel } from '../trading/RightPanel'
 import { JournalTab } from '../trading/JournalTab'
+import { FONT } from '../../constants'
 
 
 export function Workspace({ onLoadNew }) {
@@ -21,6 +22,7 @@ export function Workspace({ onLoadNew }) {
 
   const C = useTheme()
   const bars = useSimStore((s) => s.bars)
+  const analysisMode = useSimStore((s) => s.analysisMode)
   const selectedTimeframes = useSimStore((s) => s.selectedTimeframes)
   const barsMap = useSimStore((s) => s.barsMap)
   const symbolConfig = useSimStore((s) => s.symbolConfig)
@@ -251,8 +253,123 @@ export function Workspace({ onLoadNew }) {
 
   
 
+  // ── ANALYSIS MODE ──
+  // When analysis mode is active, show only metrics + journal (frees memory from charts)
+  if (analysisMode) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: '100vh', 
+        background: C.bg, 
+        fontFamily: FONT, 
+        color: C.text 
+      }}>
+        {/* Analysis Mode Header */}
+        <div style={{ 
+          height: 46, 
+          background: C.surf, 
+          borderBottom: `1px solid ${C.border}`, 
+          display: 'flex', 
+          alignItems: 'center', 
+          padding: '0 16px', 
+          gap: 16,
+          flexShrink: 0,
+        }}>
+          <div style={{ color: C.amber, fontWeight: 700, fontSize: 15, letterSpacing: 2 }}>
+            BACKTEST<span style={{ color: C.muted }}>.</span>OS
+          </div>
+          <div style={{ 
+            background: C.amber + '20', 
+            color: C.amber, 
+            padding: '4px 12px', 
+            borderRadius: 4, 
+            fontSize: 11, 
+            fontWeight: 600,
+            border: `1px solid ${C.amber}40`,
+          }}>
+            ANALYSIS MODE
+          </div>
+          <div style={{ color: C.muted, fontSize: 12 }}>
+            Performance review — market data cleared for better performance
+          </div>
+          
+          {/* Exit buttons */}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => useSimStore.getState().exitAnalysisMode()}
+              style={{
+                background: C.red + '15',
+                border: `1px solid ${C.red}50`,
+                color: C.red,
+                borderRadius: 4,
+                padding: '6px 14px',
+                cursor: 'pointer',
+                fontSize: 11,
+                fontFamily: FONT,
+                fontWeight: 600,
+              }}
+            >
+              ✕ Exit to Upload
+            </button>
+          </div>
+        </div>
+
+        {/* Full-screen metrics + journal */}
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {/* Left: Metrics/Sidebar */}
+          <div style={{ 
+            width: 280, 
+            flexShrink: 0, 
+            borderRight: `1px solid ${C.border}`,
+            overflow: 'auto',
+            background: C.surf,
+          }}>
+            <LeftSidebar ema20v={[]} ema50v={[]} bbData={{}} rsiVals={[]} />
+          </div>
+          
+          {/* Right: Full-height Journal */}
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            <JournalTab />
+          </div>
+        </div>
+        
+        {/* Bottom bar with summary */}
+        <div style={{ 
+          height: 50, 
+          background: C.surf, 
+          borderTop: `1px solid ${C.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 16px',
+          gap: 20,
+          fontSize: 12,
+          color: C.muted,
+        }}>
+          <span>
+            Trades: <strong style={{ color: C.text }}>{useTradeStore.getState().trades.length}</strong>
+          </span>
+          <span>
+            Closed: <strong style={{ color: C.green }}>
+              {useTradeStore.getState().trades.filter(t => t.status === 'closed').length}
+            </strong>
+          </span>
+          <span>
+            Open: <strong style={{ color: C.amber }}>
+              {useTradeStore.getState().trades.filter(t => t.status === 'open').length}
+            </strong>
+          </span>
+          <span style={{ marginLeft: 'auto' }}>
+            Click <strong style={{ color: C.amber }}>Exit to Upload</strong> to start a new backtest
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  // ── NORMAL BACKTESTING MODE ──
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, fontFamily: '"JetBrains Mono","SF Mono",monospace', color: C.text, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, fontFamily: '"JetBrains Mono","SF Mono",monospace', color: C.text, overflow: 'scroll' }}>
       <Header onLoadNew={onLoadNew} />
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -288,7 +405,9 @@ export function Workspace({ onLoadNew }) {
 
         {/* Right Panel */}
         <DragHandle direction="vertical" onMouseDown={startResizeRight} C={C} />
+        <div style={{ width: rightWidth, flexShrink: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           <RightPanel PanWidth={rightWidth} />
+        </div>
       </div>
 
       <SimBar

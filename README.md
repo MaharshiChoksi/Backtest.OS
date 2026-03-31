@@ -4,19 +4,23 @@
 
 Ever wanted to test your trading ideas on historical data without risking real money? That's exactly what this project does. It's a browser-based backtesting platform that lets you replay market data, simulate trades, and see exactly how your strategy would've performed.
 
-Think of it as a practice range for traders—load some historical price data, set up your trading rules, and watch how your trades would have played out over weeks, months, or even years.
-
-**Current Version**: 2.0 (Now with simultaneous multi-timeframe analysis and rock-solid price precision)
+Think of it as a practice range for traders—load some historical price data, set up your trading rules, and watch how your trades would have played out over multi-timeframe.
 
 ---
 
 ## 🤔 What Can You Actually Do With It?
 
 ### 🗠 See Multiple Timeframes at Once
-Analyze 1, 2, or 3 different timeframes simultaneously in a smart layout. Watch how your entries line up across daily, hourly, and minute charts—all updating together in real-time during playback. Each chart calculates its own technical indicators independently, giving you the full picture without jumping between tabs.
+Analyze 1, 2, or 3 different timeframes simultaneously in a smart layout. Watch how your entries line up across minute to 4 Hour charts—all updating together in real-time during playback. Each chart calculates its own indicators independently, giving you the full picture without jumping between tabs.
+
+**Smart Aggregation**: Upload 1-minute data and the engine automatically aggregates to 5-min, 15-min, 1-hour, or any higher timeframe you select. Each aggregated bar shows proper OHLCV data with correct time boundaries.
 
 ### 🔢 Play Back Historical Data
-Load your CSV or Parquet data and replay it bar by bar. Play at normal speed, pause to analyze, jump ahead, or even go in slow-motion (0.5x) to catch exactly when your trade triggers. Keyboard shortcuts keep you hands-free (spacebar to play/pause, arrow keys to step through bars).
+Load your CSV or Parquet data and replay it bar by bar. Play at normal speed, pause to analyze, jump ahead, or speed through (up to 50x or MAX). Keyboard shortcuts keep you hands-free (spacebar to play/pause, arrow keys to step through bars).
+
+**Speed Options**: 1× (real-time), 5×, 10×, 50×, MAX (instant)
+
+**Future Data Prevention**: Higher timeframe bars don't appear until they're fully complete—no peeking ahead at forming candles.
 
 ### ⌖ Enter and Track Trades
 Click to enter trades with entry price, stop loss, and take profit levels. The platform shows you exactly where these levels sit on the chart with clean visual markers. If price hits your stop loss or take profit, the trade closes automatically—just like real trading. Your P&L updates in real-time as you play through data.
@@ -28,6 +32,7 @@ Every trade gets logged in an automatically-syncing journal. Edit your stop loss
 - **Risk Calculation**: Automatically computed from entry - SL difference, updated whenever SL/TP changes
 - **Real-Time P&L**: Floating P&L for open positions updates every tick, accounting for spread cost
 - **Cumulative Balance**: Tracks account balance across trades (Starting Balance + All Closed Trade P&L)
+- **Multi-Position Balance**: When multiple trades are open, all entries show the correct cumulative balance
 - **Editable Fields**: Customize session, strategy, macro regime, analysis timeframe, and trading notes
 - **Export to Excel**: Download all trades as TSV for external analysis
 
@@ -41,6 +46,11 @@ See EMA-20, EMA-50, Bollinger Bands, and RSI-14 on your charts. Toggle them on a
 
 ### ☀️ / 🔅 Light & Dark Themes
 Trading late night? Dark mode is there. Prefer daylight mode? Switch instantly. Your preference sticks around between sessions.
+
+### ⏹️ Stop & Analyze Mode
+When your backtest is done (or anytime), click the red **"Stop & Analyze"** button. This clears all chart data from memory (preventing browser crashes) while keeping your journal and trade history intact. You get a clean, full-screen analysis view for reviewing performance without the memory overhead of charts.
+
+**Quick Navigation**: Click the BACKTEST.OS logo anytime to return to the upload screen and start a new backtest.
 
 ---
 
@@ -61,7 +71,7 @@ This is built with modern web technologies that make it fast and responsive:
 ## 📂 Project Structure
 
 ```
-BackTestingEngine/
+BackTest.OS/
 ├── src/
 │   ├── components/
 │   │   ├── chart/
@@ -121,7 +131,7 @@ BackTestingEngine/
 
 1. **Clone/Download Repository**
    ```bash
-   cd BackTestingEngine
+   cd Backtest.OS
    ```
 
 2. **Install Dependencies**
@@ -226,7 +236,17 @@ But honestly, the current version does what most traders need right now.
 
 ## Performance
 
-The app is built to be fast. The simulation engine runs every 16 milliseconds, which means you can replay data at 50x speed smoothly without the UI locking up. We're using some tricks like ref-based updates and lazy calculations to keep things snappy even with massive datasets. And thanks to the tradngview's lightweight chart library for chart engine.
+The app is built to be fast. The simulation engine runs every 16 milliseconds, which means you can replay data at 50x speed smoothly without the UI locking up. We're using some tricks like ref-based updates and lazy calculations to keep things snappy even with massive datasets. And thanks to the TradingView's lightweight chart library for chart engine.
+
+**Data Loading Optimizations**:
+- **Web Worker Parsing**: Large CSV files (50k+ rows) are parsed in a background thread, keeping the UI responsive
+- **Progress Bar**: Visual feedback during file loading and processing
+- **Binary IndexedDB Storage**: Market data cached as binary Float64Array (~10-50x faster than JSON)
+- **Chunked Processing**: Data processed in stages with progress updates
+
+**Memory Management**:
+- **Analysis Mode**: Stop backtesting to clear chart data while keeping journal for performance review
+- **Efficient State Updates**: Ref-based hot loop prevents React render starvation at high speeds
 
 ---
 
@@ -265,7 +285,21 @@ Everything stays on your machine. Your data never leaves your browser. We cache 
 
 ## Version History
 
-**V2.0** (Current)
+**V3.0** (Current)
+- **Web Worker Data Processing**: Large CSV files parsed in background thread—no UI lag
+- **Data Parsing Progress Bar**: Visual feedback during file upload and processing
+- **Binary IndexedDB Cache**: ~10-50x faster cache loads using Float64Array storage
+- **Fixed Timeframe Aggregation**: 1-minute data properly aggregates to M5, M15, H1, etc.
+- **Future Data Prevention**: Higher timeframe bars only appear when fully complete
+- **Stop & Analyze Mode**: Red button clears charts but keeps journal for memory-efficient analysis
+- **Multi-Position Balance Fix**: Journal shows correct cumulative balance with multiple open trades
+
+**V2.5**
+- Multi Timeframe data aggregation
+- Improved response time for simulation.
+- Detecting and preventing unknown selection of timeframe.
+
+**V2.0** 
 - Multi-timeframe support (run 1, 2, or 3 charts together)
 - Fixed all the timestamp precision issues
 - Charts all sync up during playback
