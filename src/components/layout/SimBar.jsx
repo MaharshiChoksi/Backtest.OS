@@ -6,7 +6,7 @@ import { fmtDate } from "../../utils/format";
 
 export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
   const C = useThemeStore((s) => s.C);
-  const { cursor, bars, playing, speed, setSpeed, setPlaying, togglePlaying } = useSimStore();
+  const { cursor, bars, playing, speed, setSpeed, setPlaying, togglePlaying, enterAnalysisMode, exitAnalysisMode } = useSimStore();
 
   const [hoverPct, setHoverPct] = useState(null);
   const trackRef = useRef();
@@ -267,9 +267,12 @@ export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
         </span>
       )}
 
+      <div style={{ width: 1, height: 20, background: C.border }} />
+
       {/* Reset */}
       <button 
         data-action="reset" 
+        title="Reset to bar 30"
         style={{ 
           background: "transparent", 
           border: `1px solid ${C.border2}`, 
@@ -279,10 +282,47 @@ export function SimBar({ onStepBack, onStepFwd, onSeek, onReset }) {
           cursor: "pointer", 
           fontSize: 10, 
           fontFamily: FONT, 
-          flexShrink: 0 
+          flexShrink: 0,
+          transition: "all .15s",
         }}
+        onMouseEnter={(e) => e.currentTarget.style.borderColor = C.amber}
+        onMouseLeave={(e) => e.currentTarget.style.borderColor = C.border2}
       >
         ↺ Reset
+      </button>
+
+      {/* Exit to Analysis Mode - clears market data but keeps journal */}
+      <button 
+        onClick={() => {
+          // Stop playing first
+          useSimStore.getState().setPlaying(false)
+          // Then enter analysis mode
+          enterAnalysisMode()
+        }}
+        title="Stop backtest and view analysis (keeps journal)"
+        style={{ 
+          background: C.red + "15", 
+          border: `1px solid ${C.red}50`, 
+          color: C.red, 
+          borderRadius: 4, 
+          padding: "6px 12px", 
+          cursor: "pointer", 
+          fontSize: 10, 
+          fontFamily: FONT, 
+          fontWeight: 600,
+          flexShrink: 0,
+          transition: "all .15s",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = C.red + "30"
+          e.currentTarget.style.borderColor = C.red
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = C.red + "15"
+          e.currentTarget.style.borderColor = C.red + "50"
+        }}
+      >
+        ■ Stop & Analyze
       </button>
     </div>
   );

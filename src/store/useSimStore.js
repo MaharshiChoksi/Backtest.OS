@@ -7,6 +7,7 @@ export const useSimStore = create((set, get) => ({
   playing: false,
   speed: 1,
   hoverBar: null,
+  analysisMode: false,  // New: when true, shows only metrics + journal
 
   // Symbol configuration
   symbolConfig: null,
@@ -19,7 +20,7 @@ export const useSimStore = create((set, get) => ({
 
   /** Load a new session — replaces bars and resets cursor */
   loadSession: (bars, fileName) =>
-    set({ bars, fileName, cursor: Math.min(30, bars.length), playing: false }),
+    set({ bars, fileName, cursor: Math.min(30, bars.length), playing: false, analysisMode: false }),
   
   /** Load multi-timeframe session */
   loadMultiTimeframeSession: (barsMap, selectedTimeframes, fileName) =>
@@ -29,7 +30,8 @@ export const useSimStore = create((set, get) => ({
       selectedTimeframes, 
       fileName, 
       cursor: Math.min(30, barsMap[selectedTimeframes[0]]?.length || 0), 
-      playing: false 
+      playing: false,
+      analysisMode: false,
     }),
 
   /** Set symbol configuration */
@@ -50,11 +52,38 @@ export const useSimStore = create((set, get) => ({
   setSpeed: (speed) => set({ speed }),
   setHoverBar: (bar) => set({ hoverBar: bar }),
 
+  /** Enable analysis mode - clears market data but keeps symbol/account config */
+  enterAnalysisMode: () =>
+    set((s) => ({ 
+      playing: false,
+      bars: [],  // Clear market data
+      barsMap: {},
+      hoverBar: null,
+      analysisMode: true,
+    })),
+
+  /** Exit analysis mode - go back to upload screen */
+  exitAnalysisMode: () =>
+    set({ 
+      bars: [], 
+      fileName: '', 
+      cursor: 30, 
+      playing: false, 
+      speed: 1, 
+      hoverBar: null, 
+      symbolConfig: null, 
+      accountConfig: null, 
+      timeframe: '1h', 
+      barsMap: {}, 
+      selectedTimeframes: ['1h'],
+      analysisMode: false,
+    }),
+
   /** Soft reset — rewind to bar 30 without clearing bars */
   reset: () =>
     set((s) => ({ cursor: Math.min(30, s.bars.length), playing: false })),
 
   /** Full reset — clears bars so App routes back to UploadScreen */
   clearSession: () =>
-    set({ bars: [], fileName: '', cursor: 30, playing: false, speed: 1, hoverBar: null, symbolConfig: null, accountConfig: null, timeframe: '1h', barsMap: {}, selectedTimeframes: ['1h'] }),
+    set({ bars: [], fileName: '', cursor: 30, playing: false, speed: 1, hoverBar: null, symbolConfig: null, accountConfig: null, timeframe: '1h', barsMap: {}, selectedTimeframes: ['1h'], analysisMode: false }),
 }))
