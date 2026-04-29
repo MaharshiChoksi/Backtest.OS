@@ -1,46 +1,53 @@
 import { useEffect, useRef } from 'react'
 import { createChart, CrosshairMode } from 'lightweight-charts'
-import { useTheme, useThemeStore }    from '../../store/useThemeStore'
-import { useSimStore }                from '../../store/useSimStore'
-import { useTradeStore }              from '../../store/useTradeStore'
-import { useIndicatorStore }          from '../../store/useIndicatorStore'
-import { buildLine }                  from '../../utils/indicators'
-import { getDecimalPlaces, msToSeconds }           from '../../utils/tradingUtils'
+import { useTheme, useThemeStore } from '../../store/useThemeStore'
+import { useSimStore } from '../../store/useSimStore'
+import { useTradeStore } from '../../store/useTradeStore'
+import { useIndicatorStore } from '../../store/useIndicatorStore'
+import { buildLine } from '../../utils/indicators'
+import { getDecimalPlaces, msToSeconds } from '../../utils/tradingUtils'
 
 /**
  * Renders the main candlestick + overlay chart.
  * Populates `chartR` refs on mount so the sim engine can call .update() directly.
- *
- * @param {{ chartR, bars, times, ema20v, ema50v, bbData, symbolConfig }} props
  */
 export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolConfig }) {
   const containerRef = useRef(null)
-  const C            = useTheme()
-  const dark         = useThemeStore((s) => s.dark)
-  const cursor       = useSimStore((s) => s.cursor)
-  const setHoverBar  = useSimStore((s) => s.setHoverBar)
-  const indic        = useIndicatorStore()
-  const trades       = useTradeStore((s) => s.trades)
+  const C = useTheme()
+  const dark = useThemeStore((s) => s.dark)
+  const cursor = useSimStore((s) => s.cursor)
+  const setHoverBar = useSimStore((s) => s.setHoverBar)
+  const indic = useIndicatorStore()
+  const trades = useTradeStore((s) => s.trades)
 
   // Keep track of which trades have markers deployed
   const tradeMarkersRef = useRef({})  // { tradeId: { entry, sl, tp } }
-  const chartInstanceRef = useRef(null)
 
   // Get decimal places from symbol config
   const decimals = symbolConfig ? getDecimalPlaces(symbolConfig.tick_size) : 5
 
-  // ── Initialize chart on first mount (or when bars change) ─
+  // ── Initialize chart on first mount (or when bars change) ──
   useEffect(() => {
-    if (!containerRef.current || !bars.length) return
+    // Guard: need container, bars, and symbolConfig
+    if (!containerRef.current || !bars || bars.length === 0 || !symbolConfig) {
+      console.log('ChartPane: Skipping chart init', {
+        hasContainer: !!containerRef.current,
+        barsLength: bars?.length,
+        hasSymbolConfig: !!symbolConfig
+      })
+      return
+    }
+
+    console.log('ChartPane: Initializing chart with', bars.length, 'bars')
 
     // Calculate minMove from tick_size
-    const minMove = symbolConfig ? symbolConfig.tick_size : 0.00001
-    
+    const minMove = symbolConfig.tick_size || 0.00001
+
     const chart = createChart(containerRef.current, {
       layout: {
-        background:  { color: C.bg },
-        textColor:   C.muted,
-        fontFamily:  '"JetBrains Mono","SF Mono",monospace',
+        background: { color: C.bg },
+        textColor: C.muted,
+        fontFamily: '"JetBrains Mono","SF Mono",monospace',
         fontSize: 13,
       },
       grid: {
@@ -48,19 +55,18 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
         horzLines: { color: C.border },
       },
       crosshair: {
-        mode:     CrosshairMode.Normal,
+        mode: CrosshairMode.Normal,
         vertLine: { color: C.amber + '50', labelBackgroundColor: C.amberD },
         horzLine: { color: C.amber + '50', labelBackgroundColor: C.amberD },
       },
-      rightPriceScale: { 
+      rightPriceScale: {
         borderColor: C.border, 
-        // Format with explicit minMove and precision to match tick_size
         format: { type: 'price', precision: decimals, minMove },
         autoScale: true,
-        mode: 0,  // 0 = normal scale (linear), 1 = logarithmic
+        mode: 0,
         scaleMargins: { top: 0.1, bottom: 0.1 },
       },
-      timeScale:       { borderColor: C.border, timeVisible: true, secondsVisible: false },
+      timeScale: { borderColor: C.border, timeVisible: true, secondsVisible: false },
       localization: {
         locale: 'en-US',
         dateFormat: 'yyyy-MM-dd',
@@ -69,7 +75,6 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
     })
 
     // ── Candle series ──
-    // Make sure priceFormat matches right price scale precisely
     const candle = chart.addCandlestickSeries({
       upColor:        C.green,
       downColor:      C.red,
@@ -90,8 +95,8 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: false })
 
     // ── Overlay line series ──
-    const mkLine = (color, w = 1) =>
-      chart.addLineSeries({ color, lineWidth: w, lastValueVisible: false, priceLineVisible: false })
+    const mkLine = (color, w = 1, style = 0) =>
+      chart.addLineSeries({ color, lineWidth: w, lastValueVisible: false, priceLineVisible: false, lineStyle: style })
 
     const e20  = mkLine(C.amber)
     const e50  = mkLine(C.purple)
@@ -143,8 +148,9 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
 
     // ── Resize observer ──
     const ro = new ResizeObserver(() => {
-      if (containerRef.current)
+      if (containerRef.current) {
         chart.resize(containerRef.current.clientWidth, containerRef.current.clientHeight)
+      }
     })
     ro.observe(containerRef.current)
 
@@ -160,7 +166,7 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
       chartR.bbUp.current   = null
       chartR.bbLow.current  = null
     }
-  }, [bars]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bars, symbolConfig]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Update chart theme when dark/light toggles ────────────
   useEffect(() => {
@@ -285,5 +291,7 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
     })
   }, [trades, bars, chartR, C]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <div ref={containerRef} style={{ flex: 1, overflow: 'hidden' }} />
+  return (
+    <div ref={containerRef} style={{ flex: 1, overflow: 'hidden' }} />
+  )
 }

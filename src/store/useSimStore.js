@@ -15,10 +15,31 @@ export const useSimStore = create((set, get) => ({
   timeframe: '1h',
   timezone: 0,  // Offset in hours from UTC (e.g., 3 for GMT+3)
   timezoneLabel: 'UTC',  // Display label (e.g., 'GMT+3')
-  
+
   // Multi-timeframe support
   selectedTimeframes: ['1h'],
   barsMap: {},
+
+  // Metrics analysis filters
+  metricsFilters: {
+    startDate: null,
+    endDate: null,
+    pair: null,
+  },
+  metricsLoading: false,
+
+  // Set metrics filters
+  setMetricsFilters: (filters) => set((state) => ({
+    metricsFilters: { ...state.metricsFilters, ...filters }
+  })),
+
+  // Reset metrics filters
+  resetMetricsFilters: () => set({
+    metricsFilters: { startDate: null, endDate: null, pair: null }
+  }),
+
+  // Set metrics loading state
+  setMetricsLoading: (loading) => set({ metricsLoading: loading }),
 
   /** Load a new session — replaces bars and resets cursor */
   loadSession: (bars, fileName) =>

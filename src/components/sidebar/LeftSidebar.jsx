@@ -7,17 +7,49 @@ import { getDecimalPlaces, getExitPrice } from '../../utils/tradingUtils'
 import { FONT }              from '../../constants'
 import { fmt, fmtPnl, fmtShortDate } from '../../utils/format'
 import { TabBar, Kv, SectionHeader, Divider, pill }  from '../ui/atoms'
+import { MetricsTab } from '../metrics/MetricsTab'
 
 export function LeftSidebar({ ema20v, ema50v, bbData, rsiVals }) {
   const C       = useTheme()
   const [tab, setTab] = useState('info')
+  const enterAnalysisMode = useSimStore((s) => s.enterAnalysisMode)
+  const analysisMode = useSimStore((s) => s.analysisMode)
+  const bars = useSimStore((s) => s.bars)
+  const trades = useTradeStore((s) => s.trades)
+
+  const hasEnoughData = bars.length > 0 && trades.filter(t => t.status === 'closed').length > 0
 
   return (
     <div style={{ width: 210, background: C.surf, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
-      <TabBar tabs={['info', 'indic']} active={tab} onChange={setTab} />
+      <TabBar tabs={['info', 'indic', 'metrics']} active={tab} onChange={setTab} />
+      
+      {/* Analysis Mode Button - only show when NOT in analysis mode */}
+      {!analysisMode && hasEnoughData && (
+        <div style={{ padding: '8px 14px', borderBottom: `1px solid ${C.border}` }}>
+          <button
+            onClick={enterAnalysisMode}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              fontSize: 11,
+              fontWeight: 600,
+              background: C.amber + '20',
+              color: C.amberD,
+              border: `1px solid ${C.amber}40`,
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontFamily: FONT,
+            }}
+          >
+            📊 End & Analyze
+          </button>
+        </div>
+      )}
+
       <div style={{ flex: 1, overflow: 'auto', padding: 14 }}>
         {tab === 'info'  && <InfoTab />}
-        {tab === 'indic' && <IndicTab ema20v={ema20v} ema50v={ema50v} bbData={bbData} rsiVals={rsiVals} />}
+        {tab === 'indic' && !analysisMode && <IndicTab ema20v={ema20v} ema50v={ema50v} bbData={bbData} rsiVals={rsiVals} />}
+        {tab === 'metrics' && <MetricsTab />}
       </div>
     </div>
   )
