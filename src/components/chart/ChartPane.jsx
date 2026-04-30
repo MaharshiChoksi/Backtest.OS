@@ -149,7 +149,12 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
     // ── Resize observer ──
     const ro = new ResizeObserver(() => {
       if (containerRef.current) {
-        chart.resize(containerRef.current.clientWidth, containerRef.current.clientHeight)
+        // Add small delay to ensure DOM is fully updated
+        requestAnimationFrame(() => {
+          if (containerRef.current) {
+            chart.resize(containerRef.current.clientWidth, containerRef.current.clientHeight)
+          }
+        })
       }
     })
     ro.observe(containerRef.current)
@@ -167,6 +172,28 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
       chartR.bbLow.current  = null
     }
   }, [bars, symbolConfig]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Monitor container size and force resize if needed ────
+  // This ensures chart resizes when right panel is dragged
+  const lastSizeRef = useRef({ width: 0, height: 0 })
+  useEffect(() => {
+    if (!chartR.chart.current || !containerRef.current) return
+
+    const checkAndResize = () => {
+      const currentWidth = containerRef.current.clientWidth
+      const currentHeight = containerRef.current.clientHeight
+      
+      if (currentWidth > 0 && currentHeight > 0 && 
+          (currentWidth !== lastSizeRef.current.width || 
+           currentHeight !== lastSizeRef.current.height)) {
+        lastSizeRef.current = { width: currentWidth, height: currentHeight }
+        chartR.chart.current?.resize(currentWidth, currentHeight)
+      }
+    }
+
+    // Check on every cursor update (happens every tick)
+    checkAndResize()
+  }, [cursor, chartR]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Update chart theme when dark/light toggles ────────────
   useEffect(() => {

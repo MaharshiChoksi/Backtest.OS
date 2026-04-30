@@ -101,6 +101,7 @@ function InfoTab() {
       {accountConfig && (
         <>
           <SectionHeader>Account</SectionHeader>
+          <Kv label="Acc Currency"    value='USD' />
           <Kv label="Starting"    value={`$${(accountConfig.starting_balance || 0).toLocaleString()}`} />
           <Kv label="Balance"     value={`$${currentBalance.toLocaleString()}`} color={currentBalance >= accountConfig.starting_balance ? C.green : C.red} />
           <Kv label="Return"      value={`${returnPercent}%`} color={returnPercent >= 0 ? C.green : C.red} />

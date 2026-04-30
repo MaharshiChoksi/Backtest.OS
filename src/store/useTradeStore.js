@@ -149,8 +149,12 @@ export const useTradeStore = create((set, get) => {
   },
 
   reset: () => {
-    saveTrades([])
-    set({ trades: [], _nextId: 1 })
+    set((s) => {
+      // Keep closed trades, only clear open trades (for replay)
+      const closedTrades = s.trades.filter((t) => t.status === 'closed')
+      saveTrades(closedTrades)
+      return { trades: closedTrades, _nextId: 1 }
+    })
   },
 
   // ── Derived selectors ──────────────────────────────────────

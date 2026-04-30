@@ -46,9 +46,15 @@ export function RsiPane({ rsiR, bars, times, rsiVals }) {
       color: C.green + '60', lineWidth: 1, lastValueVisible: false, priceLineVisible: false, lineStyle: 2,
     })
 
-    rsiSeries.setData(buildLine(rsiVals, cursor, times))
+    // Set initial data
+    if (rsiVals && rsiVals.length > 0) {
+      rsiSeries.setData(buildLine(rsiVals, cursor, times))
+    }
     ob.setData(bars.map((b) => ({ time: msToSeconds(b.time), value: 70 })))
     os.setData(bars.map((b) => ({ time: msToSeconds(b.time), value: 30 })))
+
+    // Fit content to show all data
+    chart.timeScale().fitContent()
 
     rsiR.chart.current  = chart
     rsiR.series.current = rsiSeries
@@ -65,7 +71,7 @@ export function RsiPane({ rsiR, bars, times, rsiVals }) {
       rsiR.chart.current  = null
       rsiR.series.current = null
     }
-  }, [bars]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bars, rsiVals, cursor, times, C.bg, C.muted, C.border, C.purple, C.red, C.green]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Theme update
   useEffect(() => {

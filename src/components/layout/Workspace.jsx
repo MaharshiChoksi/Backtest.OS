@@ -397,7 +397,7 @@ export function Workspace({ onLoadNew }) {
             />
           ) : (
             <ChartPane
-              chartR={chartR}
+              chartR={chartRefsMap}
               bars={barData}
               times={times}
               ema20v={ema20v}
