@@ -338,16 +338,19 @@ function FilterSection({ metricsFilters, setMetricsFilters, resetMetricsFilters,
           onClick={resetMetricsFilters}
           style={{
             padding: '6px 12px',
-            fontSize: 10,
-            background: C.surf3,
-            color: C.muted,
-            border: `1px solid ${C.border}`,
+            fontSize: 11,
+            background: C.red + '15',
+            color: C.red,
+            border: `1px solid ${C.red}50`,
             borderRadius: 4,
             cursor: 'pointer',
             fontFamily: FONT,
+            fontWeight: 600,
+            transition: 'all 0.2s',
           }}
+          title="Clear all filters and show all entries"
         >
-          Reset
+          ✕ Remove Filters
         </button>
       </div>
 

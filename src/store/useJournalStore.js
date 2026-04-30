@@ -258,9 +258,14 @@ export const useJournalStore = create((set, get) => ({
       ...rows.map(r => r.join('\t'))
     ].join('\n')
 
+    // Get start and end dates for filename after sorting data from oldest(start) to latest(end)
+    const sortedEntries = [...entries].sort((a, b) => new Date(a.entryDate + ' ' + a.entryTime) - new Date(b.entryDate + ' ' + b.entryTime))
+    const startdate = sortedEntries[0] ? sortedEntries[0].entryDate : 'start'
+    const enddate = sortedEntries[sortedEntries.length - 1] ? sortedEntries[sortedEntries.length - 1].entryDate : 'end'
+
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8;' }))
-    a.download = `backtestos_journal_${new Date().toISOString().slice(0, 10)}.tsv`
+    a.download = `backtestos_journal_${startdate}_to_${enddate}.tsv`
     a.click()
     URL.revokeObjectURL(a.href)
   },

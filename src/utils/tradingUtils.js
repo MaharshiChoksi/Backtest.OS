@@ -407,3 +407,126 @@ export function calculateAccountStats(accountConfig, trades) {
     return: ((currentBalance - startBalance) / startBalance) * 100,
   }
 }
+
+/**
+ * Calculate required margin for a new trade
+ * @param {number} lotSize - Position size in lots
+ * @param {number} currentPrice - Current price of the symbol
+ * @param {number} leverage - Leverage ratio (e.g., 100 for 1:100)
+ * @param {Object} symbolConfig - Symbol configuration with contract_size
+ * @returns {number} Required margin in account currency
+ */
+export function calculateRequiredMargin(lotSize, currentPrice, leverage, symbolConfig) {
+  if (!symbolConfig || !leverage || leverage <= 0) return 0
+  
+  const contractSize = symbolConfig.contract_size || 100000
+  const requiredPerLot = (contractSize / leverage) * currentPrice
+  return requiredPerLot * lotSize
+}
+
+/**
+ * Calculate total used margin from all open trades
+ * @param {Array} openTrades - Array of open trade objects
+ * @param {Object} symbolConfig - Symbol configuration
+ * @param {number} leverage - Account leverage
+ * @returns {number} Total used margin
+ */
+export function calculateUsedMargin(openTrades, symbolConfig, leverage) {
+  if (!openTrades || openTrades.length === 0) return 0
+  
+  let totalUsedMargin = 0
+  openTrades.forEach((trade) => {
+    const tradeMargin = calculateRequiredMargin(
+      trade.size,
+      trade.entry,
+      leverage,
+      symbolConfig
+    )
+    totalUsedMargin += tradeMargin
+  })
+  
+  return totalUsedMargin
+}
+
+/**
+ * Calculate available margin for new trades
+ * @param {number} accountBalance - Current account balance
+ * @param {number} usedMargin - Total margin already used
+ * @returns {number} Available margin
+ */
+export function calculateAvailableMargin(accountBalance, usedMargin) {
+  return Math.max(0, accountBalance - usedMargin)
+}
+
+/**
+ * Validate if there's enough margin to open a new position
+ * @param {Object} params - Validation parameters
+ * @param {number} params.accountBalance - Current account balance
+ * @param {number} params.openTrades - Array of open trades
+ * @param {number} params.positions.lotSize - New position size in lots
+ * @param {number} params.positions.entryPrice - New position entry price
+ * @param {number} params.leverage - Account leverage
+ * @param {Object} params.symbolConfig - Symbol configuration
+ * @returns {Object} Validation result with { valid: boolean, requiredMargin: number, availableMargin: number, message: string }
+ */
+export function validateMarginForTrade({
+  accountBalance,
+  openTrades = [],
+  positions = {},
+  leverage,
+  symbolConfig
+}) {
+  const { lotSize = 0, entryPrice = 0 } = positions
+  
+  if (!leverage || leverage <= 0) {
+    return {
+      valid: false,
+      requiredMargin: 0,
+      availableMargin: accountBalance,
+      usedMargin: 0,
+      message: '❌ Invalid leverage configuration'
+    }
+  }
+  
+  if (!symbolConfig) {
+    return {
+      valid: false,
+      requiredMargin: 0,
+      availableMargin: accountBalance,
+      usedMargin: 0,
+      message: '❌ Symbol configuration not available'
+    }
+  }
+  
+  if (lotSize <= 0) {
+    return {
+      valid: false,
+      requiredMargin: 0,
+      availableMargin: accountBalance,
+      usedMargin: 0,
+      message: '❌ Invalid lot size (must be > 0)'
+    }
+  }
+  
+  // Calculate margins
+  const usedMargin = calculateUsedMargin(openTrades, symbolConfig, leverage)
+  const requiredMargin = calculateRequiredMargin(lotSize, entryPrice, leverage, symbolConfig)
+  const availableMargin = calculateAvailableMargin(accountBalance, usedMargin)
+  
+  // Check if enough margin available
+  const hasEnoughMargin = availableMargin >= requiredMargin
+  
+  const marginRatio = requiredMargin > 0 ? (availableMargin / requiredMargin) * 100 : 100
+  
+  return {
+    valid: hasEnoughMargin,
+    requiredMargin: Math.round(requiredMargin * 100) / 100,
+    availableMargin: Math.round(availableMargin * 100) / 100,
+    usedMargin: Math.round(usedMargin * 100) / 100,
+    marginRatio: Math.round(marginRatio),
+    accountBalance: Math.round(accountBalance * 100) / 100,
+    message: hasEnoughMargin
+      ? `✓ Margin OK: ${requiredMargin.toFixed(2)} required, ${availableMargin.toFixed(2)} available`
+      : `❌ Insufficient margin: ${requiredMargin.toFixed(2)} required, but only ${availableMargin.toFixed(2)} available`
+  }
+}
