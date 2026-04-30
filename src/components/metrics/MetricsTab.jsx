@@ -38,8 +38,13 @@ export function MetricsTab() {
 
   // Calculate metrics with filters
   const metrics = useMemo(() => {
-    const startDate = metricsFilters.startDate ? new Date(metricsFilters.startDate) : null
-    const endDate = metricsFilters.endDate ? new Date(metricsFilters.endDate) : null
+    const sortedEntries = [...trades].sort((a, b) => new Date(a.entryDate + ' ' + a.entryTime) - new Date(b.entryDate + ' ' + b.entryTime))
+    const startdate = sortedEntries[0] ? sortedEntries[0].entryDate : 'null'
+    const enddate = sortedEntries[sortedEntries.length - 1] ? sortedEntries[sortedEntries.length - 1].entryDate : 'null'
+
+
+    const startDate = metricsFilters.startDate ? new Date(metricsFilters.startDate) : new Date(startdate)
+    const endDate = metricsFilters.endDate ? new Date(metricsFilters.endDate) : new Date(enddate)
     const pairFilter = metricsFilters.pair && metricsFilters.pair !== 'All' ? metricsFilters.pair : null
     
     return calculateMetrics(closedTrades, accountConfig, startDate, endDate, pairFilter)
