@@ -28,6 +28,17 @@ export function Workspace({ onLoadNew }) {
   const symbolConfig = useSimStore((s) => s.symbolConfig)
   const showRsi = useIndicatorStore((s) => s.rsi)
 
+  const _rsiChart = useRef(null)
+  const _rsiSeries = useRef(null)
+  const _rsiOb = useRef(null)  // add
+  const _rsiOs = useRef(null)  // add
+
+  const rsiR = useMemo(() => ({
+    chart: _rsiChart,
+    series: _rsiSeries,
+    ob: _rsiOb,   // add
+    os: _rsiOs,   // add
+  }), [])
   // Force re-render by subscribing to entire store (ensures mount/unmount works)
   const [, forceUpdate] = useState(0)
   useEffect(() => {
@@ -168,14 +179,6 @@ export function Workspace({ onLoadNew }) {
     })
     return result
   }, [isMultiTimeframe, selectedTimeframes, chartRefsMap, allTimeframeData])
-
-  const _rsiChart = useRef(null)
-  const _rsiSeries = useRef(null)
-
-  const rsiR = useMemo(() => ({
-    chart: _rsiChart,
-    series: _rsiSeries,
-  }), [])
 
   // ── Simulation engine ──────────────────────────────────────
   const { seekTo, step, cursorRef } = useSimEngine({
@@ -413,12 +416,13 @@ export function Workspace({ onLoadNew }) {
             />
           )
           }
-          {showRsi && !isMultiTimeframe && (
+          {showRsi && selectedTimeframes.length == 1 && (
             <RsiPane
               rsiR={rsiR}
               bars={barData}
               times={times}
               rsiVals={rsiVals}
+              mainChartRef={chartRefsMap[primaryTF]}
             />
           )}
         </div>
