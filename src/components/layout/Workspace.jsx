@@ -405,15 +405,20 @@ export function Workspace({ onLoadNew }) {
               rsiRefs={{}}
             />
           ) : (
-            <ChartPane
-              chartR={chartRefsMap[primaryTF]}
-              bars={barData}
-              times={times}
-              ema20v={ema20v}
-              ema50v={ema50v}
-              bbData={bbData}
-              symbolConfig={symbolConfig}
-            />
+            <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+              <div style={{ padding: '8px 14px', background: 'var(--surf)', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+                {selectedTimeframes[0]}
+              </div>
+              <ChartPane
+                chartR={chartRefsMap[primaryTF]}
+                bars={barData}
+                times={times}
+                ema20v={ema20v}
+                ema50v={ema50v}
+                bbData={bbData}
+                symbolConfig={symbolConfig}
+              />
+            </div>
           )
           }
           {showRsi && selectedTimeframes.length == 1 && (

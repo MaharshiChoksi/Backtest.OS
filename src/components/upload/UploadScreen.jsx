@@ -413,7 +413,7 @@ export function UploadScreen() {
     setSelectedTimeframes([detected])
     
     // Reset timezone to default (UTC) when confirming symbol
-    setSelectedTimezone(0)
+    setSelectedTimezone(2)
     setSelectedTimeframes([detected])
 
     if (bars.current.length > 0) {
