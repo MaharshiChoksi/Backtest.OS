@@ -169,7 +169,6 @@ export function UploadScreen() {
             // Track if we stopped early due to maxBars limit
             if (parseResult.stoppedEarly) {
               setBarLimitReached(true)
-              console.log(`⚡ Worker stopped early: processed ${parseResult.rowCount.toLocaleString()} rows, kept ${parseResult.barCount.toLocaleString()} bars (MAX_BARS: ${MAX_BARS.toLocaleString()})`)
             }
             // Store worker result for later use
             setWorkerResult(parseResult)
@@ -280,7 +279,6 @@ export function UploadScreen() {
         stoppedEarly = result.stoppedEarly
         if (stoppedEarly) {
           setBarLimitReached(true)
-          console.log(`⚡ Main-thread stopped early: processed ${result.totalProcessed.toLocaleString()} rows, kept ${validatedBars.length.toLocaleString()} bars (MAX_BARS: ${MAX_BARS.toLocaleString()})`)
         }
       }
 
@@ -334,8 +332,6 @@ export function UploadScreen() {
       }
 
       bars.current = finalBars
-      console.log('[Upload] Starting cache for', finalBars.length, 'bars')
-      console.log('[Upload] parsed.headers:', parsed?.headers?.length, 'parsed.rows:', parsed?.rows?.length)
       setStatus('Caching data...')
       setProgress(75)
 
@@ -346,13 +342,11 @@ export function UploadScreen() {
       await cacheData(fileName, parsed.headers, parsed.rows, finalBars, {
         useBinary: true,
         onProgress: (p) => {
-          console.log('[Upload] Cache progress:', p.percent, '%', p.message)
           // Map 75-95% for caching phase
           setProgress(75 + Math.round((p.percent || 0) * 0.2))
           if (p.message) setStatus(p.message)
         }
       })
-      console.log('[Upload] Cache complete')
       setProgress(95)
 
       setProgress(100)
@@ -514,8 +508,6 @@ export function UploadScreen() {
         (b) => b.time >= startTimestamp && b.time <= endTimestamp
       )
 
-      console.log('🔍 Filtered bars:', filteredBars.length, 'from', bars.current.length)
-
       if (filteredBars.length < 20) {
         setError('Selected date range has too few bars (minimum 20 required).')
         setProcessing(false)
@@ -527,42 +519,19 @@ export function UploadScreen() {
       const detectedMs = getTimeframeMs(detectedTimeframe)
       const barsMap = {}
 
-      console.log('=== Timeframe Aggregation Debug ===')
-      console.log('Detected timeframe:', detectedTimeframe, '=', detectedMs, 'ms')
-      console.log('Selected timeframes:', selectedTimeframes)
-      console.log('Original bars count:', filteredBars.length)
-      if (filteredBars.length > 0) {
-        console.log('First bar time:', new Date(filteredBars[0].time).toISOString())
-        console.log('Last bar time:', new Date(filteredBars[filteredBars.length - 1].time).toISOString())
-      }
-
       selectedTimeframes.forEach(tf => {
         const tfMs = getTimeframeMs(tf)
         const displayKey = tfDisplayMap[tf] || tf  // Use display format as key (M1, M5, etc)
-        console.log('---')
-        console.log('Processing timeframe:', tf, '→ display:', displayKey, '=', tfMs, 'ms (detected:', detectedMs, 'ms)')
 
         if (tfMs >= detectedMs) {
-          if (tfMs === detectedMs) {
-            barsMap[displayKey] = filteredBars
-            console.log('  → Same as detected, using original bars:', barsMap[displayKey].length)
-          } else {
-            const beforeCount = filteredBars.length
-            barsMap[displayKey] = aggregateBars(filteredBars, detectedMs, tfMs)
-            console.log('  → Aggregated from', beforeCount, 'bars to', barsMap[displayKey].length, 'bars (ratio:', (beforeCount / barsMap[displayKey].length).toFixed(1), ': 1)')
-            if (barsMap[displayKey].length > 0) {
-              console.log('  → First aggregated bar:', new Date(barsMap[displayKey][0].time).toISOString(), 'O:', barsMap[displayKey][0].open, 'H:', barsMap[displayKey][0].high, 'L:', barsMap[displayKey][0].low, 'C:', barsMap[displayKey][0].close)
-            }
-          }
+          barsMap[displayKey] = tfMs === detectedMs
+            ? filteredBars
+            : aggregateBars(filteredBars, detectedMs, tfMs)
         } else {
           // Can't downsample - just use original (user should load higher resolution data)
           barsMap[displayKey] = filteredBars
-          console.log('  → Lower than detected, using original bars:', barsMap[displayKey].length)
         }
       })
-      console.log('=== End Aggregation Debug ===')
-
-      console.log('📦 Final barsMap:', Object.keys(barsMap).map(k => `${k}:${barsMap[k].length}`).join(', '))
 
       setStatus('💾 Caching data (binary format)...')
       if (parsed?.headers && parsed?.rows) {
@@ -583,7 +552,6 @@ export function UploadScreen() {
         timezoneLabel  // display label
       )
 
-      console.log('✅ Backtest started successfully!')
       setStatus('')
       setProcessing(false)
       // App should navigate to Workspace automatically

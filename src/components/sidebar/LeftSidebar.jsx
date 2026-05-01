@@ -16,8 +16,6 @@ export function LeftSidebar({ ema20v, ema50v, bbData, rsiVals }) {
   const bars = useSimStore((s) => s.bars)
   const trades = useTradeStore((s) => s.trades)
 
-  const hasEnoughData = bars.length > 0 && trades.filter(t => t.status === 'closed').length > 0
-
   return (
     <div style={{ width: 230, background: C.surf, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
       <TabBar tabs={['info', 'indic']} active={tab} onChange={setTab} />

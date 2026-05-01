@@ -32,15 +32,8 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
   useEffect(() => {
     // Guard: need container, bars, and symbolConfig
     if (!containerRef.current || !bars || bars.length === 0 || !symbolConfig) {
-      console.log('ChartPane: Skipping chart init', {
-        hasContainer: !!containerRef.current,
-        barsLength: bars?.length,
-        hasSymbolConfig: !!symbolConfig
-      })
       return
     }
-
-    console.log('ChartPane: Initializing chart with', bars.length, 'bars')
 
     // Calculate minMove from tick_size
     const minMove = symbolConfig.tick_size || 0.00001

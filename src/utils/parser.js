@@ -301,8 +301,6 @@ export async function cacheData(fileName, headers, rows, bars, options = {}) {
         req.onsuccess = resolve
         req.onerror = () => reject(req.error)
       })
-
-      console.log(`📦 Cached ${bars.length} bars for ${fileName} (binary: ${(binaryData.byteLength / 1024).toFixed(2)} KB)`)
     } else if (bars && bars.length > 0) {
       await new Promise((resolve, reject) => {
         const tx = db.transaction('bars', 'readwrite')
@@ -316,8 +314,6 @@ export async function cacheData(fileName, headers, rows, bars, options = {}) {
         req.onsuccess = resolve
         req.onerror = () => reject(req.error)
       })
-
-      console.log(`📦 Cached ${bars?.length || 0} bars for ${fileName} (JSON)`)
     }
   } catch (error) {
     console.error('[Cache] Error:', error)
@@ -398,11 +394,9 @@ export async function clearCache(fileName = null) {
     if (fileName) {
       tx.objectStore('metadata').delete(fileName)
       tx.objectStore('bars').delete(fileName)
-      console.log(`🗑️ Cleared cache for ${fileName}`)
     } else {
       tx.objectStore('metadata').clear()
       tx.objectStore('bars').clear()
-      console.log(`🗑️ Cleared all cache`)
     }
   } catch (error) {
     console.error('Clear cache error:', error)
