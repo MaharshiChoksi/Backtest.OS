@@ -35,7 +35,7 @@ export function Workspace({ onLoadNew }) {
   }, [])
 
   // Determine if using multi-timeframe or single timeframe
-  const isMultiTimeframe = selectedTimeframes && selectedTimeframes.length > 1 && Object.keys(barsMap).length > 1
+  const isMultiTimeframe = selectedTimeframes && selectedTimeframes.length > 0 && Object.keys(barsMap).length > 0
   const barData = isMultiTimeframe ? barsMap[selectedTimeframes[0]] : bars
 
   // ── Pre-compute indicators for ALL timeframes in multi-timeframe mode ──
@@ -396,7 +396,7 @@ export function Workspace({ onLoadNew }) {
 
         {/* Chart column */}
         <div style={{ display: 'flex', flex: 1, minWidth: 0, flexDirection: 'column', overflow: 'hidden', borderRight: `1px solid ${C.border}` }}>
-          {isMultiTimeframe ? (
+          {selectedTimeframes.length > 1 ? (
             <MultiChartPane
               chartRefs={chartRefsMap}
               rsiRefs={{}}
