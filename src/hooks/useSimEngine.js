@@ -144,7 +144,7 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
       const barForChart = { ...bar, time: msToSeconds(bar.time) }
       
       // Update primary chart (or single chart)
-      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema20: ema20v, ema50: ema50v, bb: bbData }
+      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema20: ema20v, ema50: ema50v, bb: bbData, rsi: rsiVals }
       const primaryRefs = isMultiTimeframe ? simChartData[primaryTF]?.refs : chartR
       
       updateSingleChart(primaryRefs, barForChart, idx, ic, primaryData)
@@ -228,7 +228,7 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
       }))
 
       // Update primary chart (or single chart)
-      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema20: ema20v, ema50: ema50v, bb: bbData, times }
+      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema20: ema20v, ema50: ema50v, bb: bbData, rsi: rsiVals, times }
       const primaryRefs = isMultiTimeframe ? simChartData[primaryTF]?.refs : chartR
       
       primaryRefs.candle.current?.setData(candleData)

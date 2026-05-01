@@ -48,7 +48,8 @@ export function RsiPane({ rsiR, bars, times, rsiVals }) {
 
     // Set initial data
     if (rsiVals && rsiVals.length > 0) {
-      rsiSeries.setData(buildLine(rsiVals, cursor, times))
+      const rsiData = buildLine(rsiVals, cursor, times)
+      rsiSeries.setData(rsiData)
     }
     ob.setData(bars.map((b) => ({ time: msToSeconds(b.time), value: 70 })))
     os.setData(bars.map((b) => ({ time: msToSeconds(b.time), value: 30 })))
@@ -56,6 +57,7 @@ export function RsiPane({ rsiR, bars, times, rsiVals }) {
     // Fit content to show all data
     chart.timeScale().fitContent()
 
+    // ✓ Store ONLY the rsiSeries (not the chart) in the ref so updates work
     rsiR.chart.current  = chart
     rsiR.series.current = rsiSeries
 
@@ -71,7 +73,7 @@ export function RsiPane({ rsiR, bars, times, rsiVals }) {
       rsiR.chart.current  = null
       rsiR.series.current = null
     }
-  }, [bars, rsiVals, cursor, times, C.bg, C.muted, C.border, C.purple, C.red, C.green]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bars, rsiVals, cursor, times, C.bg, C.muted, C.border, C.purple, C.red, C.green, rsiR]) // ← Added rsiR to deps
 
   // Theme update
   useEffect(() => {
@@ -80,10 +82,10 @@ export function RsiPane({ rsiR, bars, times, rsiVals }) {
       layout: { background: { color: C.bg }, textColor: C.muted },
       grid:   { vertLines: { color: C.border }, horzLines: { color: C.border } },
     })
-  }, [dark]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dark, C.bg, C.muted, C.border, rsiR]) // ← Added C.* and rsiR to deps
 
   return (
-    <div style={{ position: 'relative', flexShrink: 0 }}>
+    <div style={{ position: 'relative', flexShrink: 0, zIndex: -10 }}>
       <span style={{ position: 'absolute', top: 4, left: 8, fontSize: 11, color: C.purple, letterSpacing: '1px', zIndex: 10, pointerEvents: 'none' }}>
         RSI 14
       </span>

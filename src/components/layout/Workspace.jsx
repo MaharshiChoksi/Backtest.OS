@@ -28,8 +28,14 @@ export function Workspace({ onLoadNew }) {
   const symbolConfig = useSimStore((s) => s.symbolConfig)
   const showRsi = useIndicatorStore((s) => s.rsi)
 
+  // Force re-render by subscribing to entire store (ensures mount/unmount works)
+  const [, forceUpdate] = useState(0)
+  useEffect(() => {
+    return useIndicatorStore.subscribe(() => forceUpdate(v => v + 1))
+  }, [])
+
   // Determine if using multi-timeframe or single timeframe
-  const isMultiTimeframe = selectedTimeframes && selectedTimeframes.length > 0 && Object.keys(barsMap).length > 0
+  const isMultiTimeframe = selectedTimeframes && selectedTimeframes.length > 1 && Object.keys(barsMap).length > 1
   const barData = isMultiTimeframe ? barsMap[selectedTimeframes[0]] : bars
 
   // ── Pre-compute indicators for ALL timeframes in multi-timeframe mode ──
@@ -50,7 +56,7 @@ export function Workspace({ onLoadNew }) {
         }
       }
     }
-    
+
     // Multi-timeframe: pre-compute all
     const result = {}
     selectedTimeframes.forEach((tf) => {
@@ -81,44 +87,44 @@ export function Workspace({ onLoadNew }) {
 
   // ── Chart series refs (populated by ChartPane / RsiPane) ──
   // Create all refs at component level (NOT inside useMemo/useEffect)
-  
+
   // For single timeframe
-  const _chart  = useRef(null)
+  const _chart = useRef(null)
   const _candle = useRef(null)
-  const _vol    = useRef(null)
-  const _ema20  = useRef(null)
-  const _ema50  = useRef(null)
-  const _bbMid  = useRef(null)
-  const _bbUp   = useRef(null)
-  const _bbLow  = useRef(null)
-  
+  const _vol = useRef(null)
+  const _ema20 = useRef(null)
+  const _ema50 = useRef(null)
+  const _bbMid = useRef(null)
+  const _bbUp = useRef(null)
+  const _bbLow = useRef(null)
+
   // For multi-timeframe (create up to 3 sets)
-  const _chart1  = useRef(null)
+  const _chart1 = useRef(null)
   const _candle1 = useRef(null)
-  const _vol1    = useRef(null)
-  const _ema201  = useRef(null)
-  const _ema501  = useRef(null)
-  const _bbMid1  = useRef(null)
-  const _bbUp1   = useRef(null)
-  const _bbLow1  = useRef(null)
-  
-  const _chart2  = useRef(null)
+  const _vol1 = useRef(null)
+  const _ema201 = useRef(null)
+  const _ema501 = useRef(null)
+  const _bbMid1 = useRef(null)
+  const _bbUp1 = useRef(null)
+  const _bbLow1 = useRef(null)
+
+  const _chart2 = useRef(null)
   const _candle2 = useRef(null)
-  const _vol2    = useRef(null)
-  const _ema202  = useRef(null)
-  const _ema502  = useRef(null)
-  const _bbMid2  = useRef(null)
-  const _bbUp2   = useRef(null)
-  const _bbLow2  = useRef(null)
-  
-  const _chart3  = useRef(null)
+  const _vol2 = useRef(null)
+  const _ema202 = useRef(null)
+  const _ema502 = useRef(null)
+  const _bbMid2 = useRef(null)
+  const _bbUp2 = useRef(null)
+  const _bbLow2 = useRef(null)
+
+  const _chart3 = useRef(null)
   const _candle3 = useRef(null)
-  const _vol3    = useRef(null)
-  const _ema203  = useRef(null)
-  const _ema503  = useRef(null)
-  const _bbMid3  = useRef(null)
-  const _bbUp3   = useRef(null)
-  const _bbLow3  = useRef(null)
+  const _vol3 = useRef(null)
+  const _ema203 = useRef(null)
+  const _ema503 = useRef(null)
+  const _bbMid3 = useRef(null)
+  const _bbUp3 = useRef(null)
+  const _bbLow3 = useRef(null)
 
   // Build chartRefsMap from individual refs
   const chartRefsMap = useMemo(() => {
@@ -152,7 +158,7 @@ export function Workspace({ onLoadNew }) {
         }
       }
     }
-    
+
     const result = {}
     selectedTimeframes.forEach((tf) => {
       result[tf] = {
@@ -163,11 +169,11 @@ export function Workspace({ onLoadNew }) {
     return result
   }, [isMultiTimeframe, selectedTimeframes, chartRefsMap, allTimeframeData])
 
-  const _rsiChart  = useRef(null)
+  const _rsiChart = useRef(null)
   const _rsiSeries = useRef(null)
 
   const rsiR = useMemo(() => ({
-    chart:  _rsiChart,
+    chart: _rsiChart,
     series: _rsiSeries,
   }), [])
 
@@ -264,40 +270,40 @@ export function Workspace({ onLoadNew }) {
     window.addEventListener('mouseup', onUp)
   }
 
-  
+
 
   // ── ANALYSIS MODE ──
   // When analysis mode is active, show only metrics + journal (frees memory from charts)
   if (analysisMode) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        height: '100vh', 
-        background: C.bg, 
-        fontFamily: FONT, 
-        color: C.text 
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        background: C.bg,
+        fontFamily: FONT,
+        color: C.text
       }}>
         {/* Analysis Mode Header */}
-        <div style={{ 
-          height: 46, 
-          background: C.surf, 
-          borderBottom: `1px solid ${C.border}`, 
-          display: 'flex', 
-          alignItems: 'center', 
-          padding: '0 16px', 
+        <div style={{
+          height: 46,
+          background: C.surf,
+          borderBottom: `1px solid ${C.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 16px',
           gap: 16,
           flexShrink: 0,
         }}>
           <div style={{ color: C.amber, fontWeight: 700, fontSize: 15, letterSpacing: 2 }}>
             BACKTEST<span style={{ color: C.muted }}>.</span>OS
           </div>
-          <div style={{ 
-            background: C.amber + '20', 
-            color: C.amber, 
-            padding: '4px 12px', 
-            borderRadius: 4, 
-            fontSize: 11, 
+          <div style={{
+            background: C.amber + '20',
+            color: C.amber,
+            padding: '4px 12px',
+            borderRadius: 4,
+            fontSize: 11,
             fontWeight: 600,
             border: `1px solid ${C.amber}40`,
           }}>
@@ -306,7 +312,7 @@ export function Workspace({ onLoadNew }) {
           <div style={{ color: C.muted, fontSize: 12 }}>
             Performance review — market data cleared for better performance
           </div>
-          
+
           {/* Exit buttons */}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <button
@@ -331,26 +337,26 @@ export function Workspace({ onLoadNew }) {
         {/* Full-screen metrics + journal */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {/* Left: Metrics/Sidebar */}
-          <div style={{ 
-            width: 280, 
-            flexShrink: 0, 
+          <div style={{
+            width: 280,
+            flexShrink: 0,
             borderRight: `1px solid ${C.border}`,
             overflow: 'auto',
             background: C.surf,
           }}>
             <LeftSidebar ema20v={[]} ema50v={[]} bbData={{}} rsiVals={[]} />
           </div>
-          
+
           {/* Right: Full-height Journal */}
           <div style={{ flex: 1, overflow: 'hidden' }}>
             <JournalTab />
           </div>
         </div>
-        
+
         {/* Bottom bar with summary */}
-        <div style={{ 
-          height: 50, 
-          background: C.surf, 
+        <div style={{
+          height: 50,
+          background: C.surf,
           borderTop: `1px solid ${C.border}`,
           display: 'flex',
           alignItems: 'center',
@@ -382,14 +388,14 @@ export function Workspace({ onLoadNew }) {
 
   // ── NORMAL BACKTESTING MODE ──
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, fontFamily: '"JetBrains Mono","SF Mono",monospace', color: C.text, overflow: 'scroll' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, fontFamily: '"JetBrains Mono","SF Mono",monospace', color: C.text, overflow: 'hidden' }}>
       <Header onLoadNew={onLoadNew} />
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flex: 1, minWidth: 0, overflow: 'hidden' }}>
         <LeftSidebar ema20v={ema20v} ema50v={ema50v} bbData={bbData} rsiVals={rsiVals} />
 
         {/* Chart column */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: `1px solid ${C.border}` }}>
+        <div style={{ display: 'flex', flex: 1, minWidth: 0, flexDirection: 'column', overflow: 'hidden', borderRight: `1px solid ${C.border}` }}>
           {isMultiTimeframe ? (
             <MultiChartPane
               chartRefs={chartRefsMap}
@@ -397,7 +403,7 @@ export function Workspace({ onLoadNew }) {
             />
           ) : (
             <ChartPane
-              chartR={chartRefsMap}
+              chartR={chartRefsMap[primaryTF]}
               bars={barData}
               times={times}
               ema20v={ema20v}
@@ -405,7 +411,8 @@ export function Workspace({ onLoadNew }) {
               bbData={bbData}
               symbolConfig={symbolConfig}
             />
-          )}
+          )
+          }
           {showRsi && !isMultiTimeframe && (
             <RsiPane
               rsiR={rsiR}
@@ -434,17 +441,17 @@ export function Workspace({ onLoadNew }) {
       {/* ── Journal bottom panel ── */}
       <DragHandle direction="horizontal" onMouseDown={startResizeJournal} C={C} />
       <div style={{
-        height:     journalHeight,
+        height: journalHeight,
         flexShrink: 0,
-        borderTop:  `1px solid ${C.border}`,
+        borderTop: `1px solid ${C.border}`,
         background: C.surf,
-        overflow:   'hidden',
-        display:    'flex',
+        overflow: 'hidden',
+        display: 'flex',
         flexDirection: 'column',
       }}>
         <JournalTab />
-        </div>
       </div>
+    </div>
   )
 }
 
@@ -460,13 +467,13 @@ function DragHandle({ direction, onMouseDown, C }) {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        flexShrink:  0,
-        width:       isV ? 5    : '100%',
-        height:      isV ? '100%' : 5,
-        cursor:      isV ? 'col-resize' : 'row-resize',
-        background:  hover ? C.amber + '60' : C.border,
-        transition:  'background .15s',
-        zIndex:      10,
+        flexShrink: 0,
+        width: isV ? 5 : '100%',
+        height: isV ? '100%' : 5,
+        cursor: isV ? 'col-resize' : 'row-resize',
+        background: hover ? C.amber + '60' : C.border,
+        transition: 'background .15s',
+        zIndex: 10,
       }}
     />
   )
