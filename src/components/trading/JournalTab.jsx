@@ -1,31 +1,31 @@
-import { useState, useMemo } from 'react'
-import { useTheme }        from '../../store/useThemeStore'
-import { useSimStore }     from '../../store/useSimStore'
-import { useTradeStore }   from '../../store/useTradeStore'
+import { useState, useMemo, useEffect } from 'react'
+import { useTheme } from '../../store/useThemeStore'
+import { useSimStore } from '../../store/useSimStore'
+import { useTradeStore } from '../../store/useTradeStore'
 import { useJournalStore } from '../../store/useJournalStore'
 import { getDecimalPlaces, getExitPrice } from '../../utils/tradingUtils'
-import { FONT }            from '../../constants'
-import { fmt, fmtPnl }     from '../../utils/format'
-import { SectionHeader }   from '../ui/atoms'
+import { FONT } from '../../constants'
+import { fmt, fmtPnl } from '../../utils/format'
+import { SectionHeader } from '../ui/atoms'
 
 // Dropdown options
 const ACCOUNTS = ['5%ers - 2.5K', 'ICMkt Real', 'ICMkt Demo', 'BackTest', 'ForwardTest', 'StressTest']
 const SESSION_OPTIONS = ['LONDON', 'NEWYORK', 'TOKYO', 'SYDNEY']
-const REGIME_OPTIONS = ['BULLCONT' ,'BULLREV', 'BEARCONT','BEARREV', 'NOISE']
+const REGIME_OPTIONS = ['BULLCONT', 'BULLREV', 'BEARCONT', 'BEARREV', 'NOISE']
 const STRATEGY_OPTIONS = ['INDICES-SETUP-A-REVERSAL', 'INDICES-SETUP-B-CONTINUATION', 'COMMODITY-AMDX', 'CURRENCY-REGIME & TREND CONTINUATION']
 const TF_OPTIONS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
 const SYMBOLS = ["EURUSD", "USDJPY", "GBPUSD", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD", "EURGBP", "EURJPY", "AUDCHF", "XAUUSD", "XAGUSD", "BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD", "DOGEUSD", "XTIUSD", "SP500 / US500 / SPX500", "USTECH / US100 / NASDAQ", "US30 / DJI30 / DOW"]
 
 export function JournalTab() {
-  const C         = useTheme()
-  const bars      = useSimStore((s) => s.bars)
-  const cursor    = useSimStore((s) => s.cursor)
+  const C = useTheme()
+  const bars = useSimStore((s) => s.bars)
+  const cursor = useSimStore((s) => s.cursor)
   const symbolConfig = useSimStore((s) => s.symbolConfig)
   const accountConfig = useSimStore((s) => s.accountConfig)
-  const trades    = useTradeStore((s) => s.trades)
+  const trades = useTradeStore((s) => s.trades)
   const modifyTrade = useTradeStore((s) => s.modifyTrade)
   const resetTrades = useTradeStore((s) => s.reset)  // Reset trades too
-  const entries   = useJournalStore((s) => s.entries)
+  const entries = useJournalStore((s) => s.entries)
   const syncOpenTrade = useJournalStore((s) => s.syncOpenTrade)
   const syncClosedTrade = useJournalStore((s) => s.syncClosedTrade)
   const updateEntry = useJournalStore((s) => s.updateEntry)
@@ -40,14 +40,20 @@ export function JournalTab() {
   const [scrollX, setScrollX] = useState(0)
   const [confirmClear, setConfirmClear] = useState(false)
 
+  useEffect(() => {
+    if (!confirmClear) return
+    const t = setTimeout(() => setConfirmClear(false), 3000)
+    return () => clearTimeout(t)
+  }, [confirmClear])
+
   // Auto-sync trades to journal and recalculate balances
-  useMemo(() => {
+  useEffect(() => {
     trades.forEach(trade => {
       const entryExists = entries.find(e => e.tradeId === trade.id)
       if (!entryExists && trade.status === 'open') {
         syncOpenTrade(trade, symbolConfig, accountConfig)
       }
-      
+
       // Sync closed trades even if they don't have a journal entry yet (e.g., closed before synced)
       if (trade.status === 'closed' && !entryExists) {
         // First sync as open trade, then immediately as closed
@@ -56,14 +62,14 @@ export function JournalTab() {
       } else if (trade.status === 'closed' && entryExists && !entryExists.exitPrice) {
         syncClosedTrade(trade, symbolConfig)
       }
-      
+
       // Sync SL/TP changes for open trades
       if (entryExists && trade.status === 'open' && (entryExists.stopLoss !== trade.sl || entryExists.takeProfit !== trade.tp)) {
         updateEntry(trade.id, 'stopLoss', trade.sl)
         updateEntry(trade.id, 'takeProfit', trade.tp)
       }
     })
-  }, [trades, entries, symbolConfig, accountConfig, updateEntry, syncOpenTrade, syncClosedTrade])
+  }, [trades])
 
   const displayEntries = useMemo(() => {
     return showClosed
@@ -106,21 +112,19 @@ export function JournalTab() {
                 if (!confirmClear) {
                   setConfirmClear(true)
                 } else {
-                  // Reset BOTH trade store AND journal store
-                  // Journal is synced from trades, so both must be cleared
-                  resetTrades()  // Clear trades first
-                  resetJournal()  // Then clear journal entries
+                  useTradeStore.getState().reset()
+                  useJournalStore.getState().reset()
+                  useSimStore.getState().reset()
                   setConfirmClear(false)
                 }
               }}
-              onBlur={() => setConfirmClear(false)}
               style={{
                 padding: '4px 10px',
                 borderRadius: 3,
                 border: `1px solid ${confirmClear ? C.red : C.border}`,
                 background: confirmClear ? C.red + '15' : 'transparent',
                 color: confirmClear ? C.red : C.muted,
-                  fontSize: 12,
+                fontSize: 12,
                 cursor: 'pointer',
                 transition: 'all .2s',
               }}
@@ -209,7 +213,7 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
     { key: 'balance', label: 'BALANCE', width: 90, editable: false, format: (v) => `$${v.toFixed(0)}` },
     { key: 'deposits', label: 'DEPOSITS', width: 90, editable: false, format: (v) => `$${v.toFixed(0)}` },
     { key: 'withdrawals', label: 'WITHDRAWALS', width: 100, editable: false, format: (v) => `$${v.toFixed(0)}` },
-    
+
     // Trade Entry Details
     { key: 'entryDate', label: 'ENTRY DATE', width: 100, editable: false },
     { key: 'entryTime', label: 'ENTRY TIME', width: 90, editable: false },
@@ -217,20 +221,20 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
     { key: 'direction', label: 'DIRECTION', width: 80, editable: true, type: 'dropdown', options: ['BUY', 'SELL'] },
     { key: 'entryPrice', label: 'ENTRY PRICE', width: 100, editable: false, format: (v) => v.toFixed(priceDecimals) },
     { key: 'lotSize', label: 'LOT SIZE', width: 80, editable: true, format: (v) => v.toFixed(2) },
-    
+
     // Session & Strategy
     { key: 'session', label: 'SESSION', width: 100, editable: true, type: 'dropdown', options: SESSION_OPTIONS },
     { key: 'macroRegime', label: 'MACRO REGIME', width: 120, editable: true, type: 'dropdown', options: REGIME_OPTIONS },
     { key: 'strategyType', label: 'STRATEGY TYPE', width: 120, editable: true, type: 'dropdown', options: STRATEGY_OPTIONS },
     { key: 'analysisTf', label: 'ANALYSIS TF', width: 100, editable: true, type: 'dropdown', options: TF_OPTIONS },
     { key: 'entryTf', label: 'ENTRY TF', width: 100, editable: true, type: 'dropdown', options: TF_OPTIONS },
-    
+
     // Position Management
     { key: 'stopLoss', label: 'STOP LOSS', width: 100, editable: true, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
     { key: 'takeProfit', label: 'TAKE PROFIT', width: 110, editable: true, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
     { key: 'risk', label: 'RISK ($)', width: 90, editable: false, format: (v) => `$${v.toFixed(2)}` },
     { key: 'fees', label: 'FEES ($)', width: 85, editable: true, format: (v) => `$${v.toFixed(2)}` },
-    
+
     // Results (auto-calculated)
     { key: 'pnlUsd', label: 'P/L ($)', width: 90, editable: false, format: (v) => fmtPnl(v) },
     { key: 'pnlPips', label: 'P/L (PIPS)', width: 100, editable: false, format: (v) => v.toFixed(1) },
@@ -296,23 +300,23 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
   // Calculate real-time PnL for open positions
   const runtimePnL = useMemo(() => {
     if (entry.exitPrice || !currentBar || !symbolConfig || !accountConfig) return entry
-    
+
     const pipSize = symbolConfig.pip_size || 0.0001
     const pipValue = symbolConfig.pip_value || 10
-    
+
     // Get exit price with spread adjustment (what trader would actually receive)
     const spreadInPips = accountConfig.spread || 0
     const exitPrice = getExitPrice(currentBar.close, entry.direction === 'BUY' ? 'buy' : 'sell', spreadInPips, pipSize)
-    
+
     const priceDiff = exitPrice - entry.entryPrice
     const pnlPips = (priceDiff / pipSize) * (entry.direction === 'SELL' ? -1 : 1)
-    
+
     // Use stored fees (already calculated as entry + exit commissions)
     const totalFees = entry.fees || 0
-    
+
     // P&L = raw P&L - all fees
     const pnlUsd = pnlPips * pipValue * entry.lotSize - totalFees
-    
+
     return {
       ...entry,
       pnlUsd,
@@ -328,9 +332,9 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
     } else if (key === 'stopLoss' || key === 'takeProfit') {
       finalValue = parseFloat(value) || null
     }
-    
+
     updateEntry(entry.tradeId, key, finalValue)
-    
+
     // Also update trade details for SL/TP
     if (key === 'stopLoss' || key === 'takeProfit') {
       const numValue = parseFloat(value) || null
@@ -440,7 +444,10 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
         }}
       >
         <button
-          onClick={() => removeEntry(entry.tradeId)}
+          onClick={() => {
+            removeEntry(entry.tradeId)
+            useTradeStore.getState().removeTrade?.(entry.tradeId)
+          }}
           style={{
             background: 'transparent',
             border: 'none',
