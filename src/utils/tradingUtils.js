@@ -420,7 +420,27 @@ export function calculateRequiredMargin(lotSize, currentPrice, leverage, symbolC
   if (!symbolConfig || !leverage || leverage <= 0) return 0
   
   const contractSize = symbolConfig.contract_size || 100000
-  const requiredPerLot = (contractSize / leverage) * currentPrice
+  const baseUsdRate = typeof symbolConfig.base_usd_rate === 'number'
+    ? symbolConfig.base_usd_rate
+    : symbolConfig.base_usd_rate && !isNaN(parseFloat(symbolConfig.base_usd_rate))
+      ? parseFloat(symbolConfig.base_usd_rate)
+      : undefined
+
+  let conversionRate = baseUsdRate
+
+  if (conversionRate === undefined) {
+    if (symbolConfig.quote_currency === 'USD') {
+      conversionRate = currentPrice
+    } else if (symbolConfig.base_currency === 'USD') {
+      conversionRate = 1
+    }
+  }
+
+  if (!conversionRate || conversionRate <= 0) {
+    return 0
+  }
+
+  const requiredPerLot = (contractSize / leverage) * conversionRate
   return requiredPerLot * lotSize
 }
 
@@ -495,6 +515,22 @@ export function validateMarginForTrade({
       availableMargin: accountBalance,
       usedMargin: 0,
       message: '❌ Symbol configuration not available'
+    }
+  }
+
+  const baseUsdRate = typeof symbolConfig.base_usd_rate === 'number'
+    ? symbolConfig.base_usd_rate
+    : symbolConfig.base_usd_rate && !isNaN(parseFloat(symbolConfig.base_usd_rate))
+      ? parseFloat(symbolConfig.base_usd_rate)
+      : undefined
+
+  if (symbolConfig.quote_currency !== 'USD' && symbolConfig.base_currency !== 'USD' && !baseUsdRate) {
+    return {
+      valid: false,
+      requiredMargin: 0,
+      availableMargin: accountBalance,
+      usedMargin: 0,
+      message: '❌ Missing Base/USD conversion rate for this exotic pair'
     }
   }
   

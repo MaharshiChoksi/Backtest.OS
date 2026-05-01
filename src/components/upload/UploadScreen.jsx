@@ -398,12 +398,28 @@ export function UploadScreen() {
       setError('Please select a valid symbol.')
       return
     }
+
+    const normalizedBaseUsdRate = symbolConfig.base_usd_rate !== undefined && symbolConfig.base_usd_rate !== ''
+      ? parseFloat(symbolConfig.base_usd_rate)
+      : undefined
+
+    if (symbolConfig.quote_currency !== 'USD' && !normalizedBaseUsdRate) {
+      setError('Please enter the Base/USD rate for this exotic pair.')
+      return
+    }
+
+    const symbolConfigWithBaseRate = {
+      ...symbolConfig,
+      base_usd_rate: normalizedBaseUsdRate,
+    }
+
+    setSymbolConfigState(symbolConfigWithBaseRate)
     setError('')
     // Update account form with margin_required from symbol config
     setAccountForm((prev) => ({
       ...prev,
-      margin_required: symbolConfig.margin_required || 1000,
-      leverage: symbolConfig.leverage || 100,
+      margin_required: symbolConfigWithBaseRate.margin_required || 1000,
+      leverage: symbolConfigWithBaseRate.leverage || 100,
     }))
 
     // Detect timeframe and set date range
@@ -1072,33 +1088,43 @@ export function UploadScreen() {
                 </div>
 
                 {symbolConfig && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    {[
-                      { key: 'full_name', label: 'Full Name' },
-                      { key: 'base_currency', label: 'Base Currency' },
-                      { key: 'quote_currency', label: 'Quote Currency' },
-                      { key: 'pip_size', label: 'Pip Size' },
-                      { key: 'pip_value', label: 'Pip Value' },
-                      { key: 'contract_size', label: 'Contract Size' },
-                      { key: 'leverage', label: 'Leverage' },
-                      { key: 'margin_required', label: 'Margin Required (USD)' },
-                    ].map(({ key, label }) => (
-                      <div key={key}>
-                        <label style={{ ...lbl, marginBottom: 4 }}>{label}</label>
-                        <input
-                          type="text"
-                          value={symbolConfig[key] || ''}
-                          onChange={(e) =>
-                            setSymbolConfigState((prev) => ({
-                              ...prev,
-                              [key]: e.target.value,
-                            }))
-                          }
-                          style={{ ...inp }}
-                        />
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      {[
+                        { key: 'full_name', label: 'Full Name' },
+                        { key: 'base_currency', label: 'Base Currency' },
+                        { key: 'quote_currency', label: 'Quote Currency' },
+                        { key: 'base_usd_rate', label: 'Base/USD Rate' },
+                        { key: 'pip_size', label: 'Pip Size' },
+                        { key: 'pip_value', label: 'Pip Value' },
+                        { key: 'contract_size', label: 'Contract Size' },
+                        { key: 'leverage', label: 'Leverage' },
+                        { key: 'margin_required', label: 'Margin Required (USD)' },
+                      ].map(({ key, label }) => (
+                        <div key={key}>
+                          <label style={{ ...lbl, marginBottom: 4 }}>{label}</label>
+                          <input
+                            type={key === 'base_usd_rate' || key === 'pip_size' || key === 'pip_value' || key === 'contract_size' || key === 'leverage' || key === 'margin_required' ? 'number' : 'text'}
+                            step={key === 'base_usd_rate' ? '0.0001' : 'any'}
+                            min={key === 'base_usd_rate' ? '0' : undefined}
+                            value={symbolConfig[key] || ''}
+                            onChange={(e) =>
+                              setSymbolConfigState((prev) => ({
+                                ...prev,
+                                [key]: e.target.value,
+                              }))
+                            }
+                            style={{ ...inp }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    {symbolConfig.quote_currency !== 'USD' && (
+                      <div style={{ gridColumn: '1 / -1', color: C.muted, fontSize: 12, marginTop: 8 }}>
+                        Please enter the conversion rate for {symbolConfig.base_currency}/USD so margin is calculated in USD.
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </div>
             )}

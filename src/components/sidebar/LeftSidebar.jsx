@@ -85,6 +85,14 @@ function InfoTab() {
       ? ((currentBalance - accountConfig.starting_balance) / accountConfig.starting_balance * 100).toFixed(2)
       : 0, [currentBalance, accountConfig])
 
+  const baseUsdLabel = symbolConfig
+    ? symbolConfig.quote_currency === 'USD'
+      ? '1.0000'
+      : symbolConfig.base_usd_rate !== undefined && symbolConfig.base_usd_rate !== ''
+        ? Number(symbolConfig.base_usd_rate).toFixed(4)
+        : 'required'
+    : '—'
+
   return (
     <>
       {symbolConfig && (
@@ -94,6 +102,9 @@ function InfoTab() {
           <Kv label="Pip Size"   value={symbolConfig.pip_size} />
           <Kv label="Spread"     value={`${accountConfig?.spread || 0} pips`} />
           <Kv label="Leverage"   value={`${accountConfig?.leverage || 0}:1`} />
+          {symbolConfig.quote_currency !== 'USD' && (
+            <Kv label="Base/USD" value={baseUsdLabel} />
+          )}
           <Divider />
         </>
       )}
