@@ -229,7 +229,7 @@ export async function cacheData(fileName, headers, rows, bars, options = {}) {
 
   try {
     const db = await new Promise((resolve, reject) => {
-      const req = indexedDB.open('BacktestDB', 2)
+      const req = indexedDB.open('BacktestDB', 3)
       req.onupgradeneeded = (e) => {
         const db = e.target.result
         if (!db.objectStoreNames.contains('metadata')) {
@@ -388,7 +388,7 @@ export async function loadCachedData(fileName) {
 export async function clearCache(fileName = null) {
   try {
     const db = await new Promise((resolve, reject) => {
-      const req = indexedDB.open('BacktestDB', 2)
+      const req = indexedDB.open('BacktestDB', 3)
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
     })

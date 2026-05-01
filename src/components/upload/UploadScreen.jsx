@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useTheme } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
 import { FONT } from '../../constants'
-import { parseDelimited, parseDelimitedAsync, parseParquet, parseCSVWithWorker, cacheData, loadCachedData, detectMapping, rowToBar, convertBarTimezone, rowsToBarsLimited, validateTimeIntervals, convertBarsTimezone } from '../../utils/parser'
+import { parseDelimitedAsync, parseParquet, parseCSVWithWorker, cacheData, detectMapping, rowsToBarsLimited, validateTimeIntervals, convertBarsTimezone, clearCache } from '../../utils/parser'
 import { generateSampleBars } from '../../utils/format'
 import { searchSymbol, getAccountDefaults } from '../../utils/symbolUtils'
 import { detectTimeframe, aggregateBars, getTimeframeMs } from '../../utils/tradingUtils'
@@ -23,13 +23,13 @@ const MAX_BARS = 1_000_000  // Maximum bars to load (1 million) for performance 
 export const TIMEZONE_OPTIONS = [
   // UTC
   { label: 'UTC (GMT+0)', value: 0 },
-  
+
   // European Timezones
   { label: 'GMT+1 (London Winter)', value: 1 },
   { label: 'GMT+2 (Cairo/Moscow)', value: 2 },
   { label: 'GMT+3 (Moscow/Istanbul)', value: 3 },
   { label: 'GMT+4 (Dubai)', value: 4 },
-  
+
   // Asian Timezones
   { label: 'GMT+5 (Karachi)', value: 5 },
   { label: 'GMT+5:30 (Kolkata/Delhi)', value: 5.5 },
@@ -45,7 +45,7 @@ export const TIMEZONE_OPTIONS = [
   { label: 'GMT+12 (Auckland)', value: 12 },
   { label: 'GMT+13 (Fiji Summer)', value: 13 },
   { label: 'GMT+14 (Kiribati)', value: 14 },
-  
+
   // American Timezones
   { label: 'GMT-1 (Azores)', value: -1 },
   { label: 'GMT-2 (Mid-Atlantic)', value: -2 },
@@ -104,10 +104,10 @@ export function UploadScreen() {
   const [availableDateRange, setAvailableDateRange] = useState(null)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  
+
   // Timezone state - default UTC
   const [selectedTimezone, setSelectedTimezone] = useState(0)  // Offset in hours from UTC
-  
+
   // Timeframe options (must match getTimeframeMs format): lowercase like '1m', '5m', etc
   const TIMEFRAME_OPTIONS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
   const tfDisplayMap = { '1m': 'M1', '5m': 'M5', '15m': 'M15', '30m': 'M30', '1h': 'H1', '4h': 'H4', '1d': 'D1' }
@@ -141,7 +141,7 @@ export function UploadScreen() {
       } else {
         const text = e.target.result
         const rowEstimate = text.split('\n').length
-        
+
         // Use Web Worker for large files (>50k rows) to avoid UI lag
         if (rowEstimate > 50000) {
           setStatus('Parsing CSV (background processing)')
@@ -201,7 +201,7 @@ export function UploadScreen() {
 
       setProgress(80)
       setStatus('Preparing columns...')
-      
+
       if (!result) {
         setProcessing(false)
         setProgress(0)
@@ -209,7 +209,7 @@ export function UploadScreen() {
         setError(`Could not parse file — please check the format (${isParquet ? 'Parquet' : 'CSV'}).`)
         return
       }
-      
+
       setProgress(100)
       setTimeout(() => {
         setParsed(result)
@@ -243,7 +243,7 @@ export function UploadScreen() {
 
       let validatedBars
       let stoppedEarly = false
-      
+
       // If we have pre-parsed bars from Web Worker, filter them by the mapping
       if (workerResult && workerResult.bars && workerResult.bars.length > 0) {
         setStatus('Filtering data...')
@@ -257,7 +257,7 @@ export function UploadScreen() {
         // Fall back to main-thread parsing with early termination
         setStatus('Converting rows to bars...')
         setProgress(25)
-        
+
         // Use rowsToBarsLimited for early termination - stops when MAX_BARS reached
         const result = await rowsToBarsLimited(parsed.rows, mapping, {
           maxBars: MAX_BARS,
@@ -266,16 +266,16 @@ export function UploadScreen() {
             setProgress(25 + Math.round(percent * 0.2))
           }
         })
-        
+
         validatedBars = result.bars
           .sort((a, b) => a.time - b.time)
         setProgress(45)
-        
+
         // Remove duplicates
         const unique = validatedBars.filter((b, i) => i === 0 || b.time !== validatedBars[i - 1].time)
         validatedBars = unique
         setProgress(50)
-        
+
         // Track if we stopped early
         stoppedEarly = result.stoppedEarly
         if (stoppedEarly) {
@@ -294,7 +294,7 @@ export function UploadScreen() {
 
       setStatus('Validating time intervals...')
       setProgress(55)
-      
+
       // Validate minimum 1-minute bar interval asynchronously (reject tick data)
       const { minInterval } = await validateTimeIntervals(validatedBars, {
         onProgress: (percent) => {
@@ -319,7 +319,7 @@ export function UploadScreen() {
         finalBars = validatedBars.slice(0, MAX_BARS)
         setBarLimitReached(true)
       }
-      
+
       // Apply timezone conversion to bars asynchronously (if not UTC)
       // Convert from data timezone to UTC for storage
       if (selectedTimezone !== 0) {
@@ -338,12 +338,12 @@ export function UploadScreen() {
       console.log('[Upload] parsed.headers:', parsed?.headers?.length, 'parsed.rows:', parsed?.rows?.length)
       setStatus('Caching data...')
       setProgress(75)
-      
+
       // Force a re-render before starting the heavy work
       await new Promise(r => setTimeout(r, 50))
-      
+
       // Cache with binary format for faster reload
-      await cacheData(fileName, parsed.headers, parsed.rows, finalBars, { 
+      await cacheData(fileName, parsed.headers, parsed.rows, finalBars, {
         useBinary: true,
         onProgress: (p) => {
           console.log('[Upload] Cache progress:', p.percent, '%', p.message)
@@ -354,7 +354,7 @@ export function UploadScreen() {
       })
       console.log('[Upload] Cache complete')
       setProgress(95)
-      
+
       setProgress(100)
       setTimeout(() => {
         setStatus('')
@@ -411,7 +411,7 @@ export function UploadScreen() {
     setDetectedTimeframe(detected)
     setSelectedTimeframe(detected)
     setSelectedTimeframes([detected])
-    
+
     // Reset timezone to default (UTC) when confirming symbol
     setSelectedTimezone(2)
     setSelectedTimeframes([detected])
@@ -419,10 +419,10 @@ export function UploadScreen() {
     if (bars.current.length > 0) {
       const firstBar = bars.current[0]
       const lastBar = bars.current[bars.current.length - 1]
-      
-      setAvailableDateRange({ 
-        startTime: new Date(firstBar.time), 
-        endTime: new Date(lastBar.time) 
+
+      setAvailableDateRange({
+        startTime: new Date(firstBar.time),
+        endTime: new Date(lastBar.time)
       })
       setStartDate(new Date(firstBar.time).toISOString().split('T')[0])
       setEndDate(new Date(lastBar.time).toISOString().split('T')[0])
@@ -430,7 +430,7 @@ export function UploadScreen() {
 
     setStep(STEPS.ACCOUNT)
   }
-  
+
   const handleToggleTimeframe = (tf) => {
     setSelectedTimeframes(curr => {
       if (curr.includes(tf)) {
@@ -471,7 +471,7 @@ export function UploadScreen() {
       setProcessing(true)
       setError('')
       setStatus('🔄 Preparing backtest...')
-      
+
       // Ensure symbol and account config are set
       if (!symbolConfig) {
         setError('Symbol config is missing!')
@@ -479,17 +479,17 @@ export function UploadScreen() {
         setStatus('')
         return
       }
-      
+
       // Add timezone to symbolConfig
       const configWithTimezone = {
         ...symbolConfig,
         timezone: selectedTimezone,  // Offset in hours from UTC
         timezoneLabel: TIMEZONE_OPTIONS.find(tz => tz.value === selectedTimezone)?.label || 'UTC',
       }
-      
+
       setSymbolConfig(configWithTimezone)
       setAccountConfig(accountForm)
-      
+
       setStatus('📊 Filtering data by date range...')
       const startTimestamp = new Date(startDate).getTime()
       const endTimestamp = new Date(endDate).getTime() + 86400000
@@ -510,7 +510,7 @@ export function UploadScreen() {
       setStatus('⚙️ Aggregating timeframes...')
       const detectedMs = getTimeframeMs(detectedTimeframe)
       const barsMap = {}
-      
+
       console.log('=== Timeframe Aggregation Debug ===')
       console.log('Detected timeframe:', detectedTimeframe, '=', detectedMs, 'ms')
       console.log('Selected timeframes:', selectedTimeframes)
@@ -519,13 +519,13 @@ export function UploadScreen() {
         console.log('First bar time:', new Date(filteredBars[0].time).toISOString())
         console.log('Last bar time:', new Date(filteredBars[filteredBars.length - 1].time).toISOString())
       }
-      
+
       selectedTimeframes.forEach(tf => {
         const tfMs = getTimeframeMs(tf)
         const displayKey = tfDisplayMap[tf] || tf  // Use display format as key (M1, M5, etc)
         console.log('---')
         console.log('Processing timeframe:', tf, '→ display:', displayKey, '=', tfMs, 'ms (detected:', detectedMs, 'ms)')
-        
+
         if (tfMs >= detectedMs) {
           if (tfMs === detectedMs) {
             barsMap[displayKey] = filteredBars
@@ -547,7 +547,7 @@ export function UploadScreen() {
       console.log('=== End Aggregation Debug ===')
 
       console.log('📦 Final barsMap:', Object.keys(barsMap).map(k => `${k}:${barsMap[k].length}`).join(', '))
-      
+
       setStatus('💾 Caching data (binary format)...')
       if (parsed?.headers && parsed?.rows) {
         await cacheData(fileName, parsed.headers, parsed.rows, bars.current, { useBinary: true })
@@ -555,18 +555,18 @@ export function UploadScreen() {
 
       setStatus('🚀 Loading session...')
       setTimeframe(tfDisplayMap[selectedTimeframes[0]] || selectedTimeframes[0])  // Set with display format
-      
+
       // Get timezone info
       const timezoneLabel = TIMEZONE_OPTIONS.find(tz => tz.value === selectedTimezone)?.label || 'UTC'
-      
+
       useSimStore.getState().loadMultiTimeframeSession(
-        barsMap, 
-        selectedTimeframes.map(tf => tfDisplayMap[tf] || tf), 
+        barsMap,
+        selectedTimeframes.map(tf => tfDisplayMap[tf] || tf),
         fileName,
         selectedTimezone,  // timezone offset in hours
         timezoneLabel  // display label
       )
-      
+
       console.log('✅ Backtest started successfully!')
       setStatus('')
       setProcessing(false)
@@ -608,7 +608,7 @@ export function UploadScreen() {
           100% { background-position: 200% 0; }
         }
       `}</style>
-      
+
       {/* Brand */}
       <div style={{ textAlign: 'center', marginBottom: 48 }}>
         <div style={{ fontSize: 17, color: C.muted, letterSpacing: '5px', textTransform: 'uppercase', marginBottom: 8 }}>
@@ -685,9 +685,9 @@ export function UploadScreen() {
             {processing ? (
               <div style={{ width: '100%', maxWidth: 350, textAlign: 'center' }}>
                 {/* File name */}
-                <div style={{ 
-                  color: C.text, 
-                  fontSize: 13, 
+                <div style={{
+                  color: C.text,
+                  fontSize: 13,
                   marginBottom: 16,
                   fontWeight: 500,
                   overflow: 'hidden',
@@ -697,7 +697,7 @@ export function UploadScreen() {
                 }}>
                   {fileName}
                 </div>
-                
+
                 {/* Progress bar */}
                 <div style={{
                   width: '100%',
@@ -716,7 +716,7 @@ export function UploadScreen() {
                     boxShadow: `0 0 10px ${C.amber}40`
                   }} />
                 </div>
-                
+
                 {/* Progress percentage */}
                 <div style={{
                   display: 'flex',
@@ -731,14 +731,14 @@ export function UploadScreen() {
                     {status || 'Processing...'}
                   </span>
                 </div>
-                
+
                 {/* Animated indicator */}
-                <div style={{ 
-                  color: C.amber, 
+                <div style={{
+                  color: C.amber,
                   fontSize: 12,
                   marginTop: 8
                 }}>
-                  <span style={{ 
+                  <span style={{
                     animation: 'progressPulse 1.5s ease-in-out infinite',
                     display: 'inline-block'
                   }}>
@@ -1377,7 +1377,7 @@ export function UploadScreen() {
             </div>
 
             {error && <div style={{ color: C.red, fontSize: 11, marginBottom: 12 }}>⚠ {error}</div>}
-            
+
             {status && (
               <div
                 style={{

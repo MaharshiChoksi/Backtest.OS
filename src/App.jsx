@@ -1,10 +1,16 @@
-import { useSimStore }    from './store/useSimStore'
-import { UploadScreen }   from './components/upload/UploadScreen'
-import { Workspace }      from './components/layout/Workspace'
+import { useEffect } from 'react'
+import { useSimStore } from './store/useSimStore'
+import { UploadScreen } from './components/upload/UploadScreen'
+import { Workspace } from './components/layout/Workspace'
 import { AnalysisScreen } from './components/analysis/AnalysisScreen'
+import { clearCache } from './utils/parser'
 
 export default function App() {
-  const hasBars      = useSimStore((s) => s.bars.length > 0)
+  useEffect(() => {
+    clearCache()
+  }, [])
+
+  const hasBars = useSimStore((s) => s.bars.length > 0)
   const analysisMode = useSimStore((s) => s.analysisMode)
   const clearSession = useSimStore((s) => s.clearSession)
 
