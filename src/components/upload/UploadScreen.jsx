@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTheme } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
+import { useIndicatorStore as useIndStore } from '../../store/useIndicatorStore'
 import { FONT } from '../../constants'
 import { parseDelimitedAsync, parseParquet, parseCSVWithWorker, cacheData, detectMapping, rowsToBarsLimited, validateTimeIntervals, convertBarsTimezone, clearCache } from '../../utils/parser'
 import { generateSampleBars } from '../../utils/format'
@@ -12,6 +13,7 @@ const STEPS = {
   UPLOAD: 'upload',
   MAPPING: 'mapping',
   SYMBOL: 'symbol',
+  INDICATORS: 'indicators',
   ACCOUNT: 'account',
 }
 
@@ -107,6 +109,18 @@ export function UploadScreen() {
 
   // Timezone state - default UTC
   const [selectedTimezone, setSelectedTimezone] = useState(0)  // Offset in hours from UTC
+
+  // Indicator configuration state
+  const [emaEnabled, setEmaEnabled] = useState(true)
+  const [emaPeriods, setEmaPeriods] = useState([20, 50, 100])
+  const [emaPeriodsInput, setEmaPeriodsInput] = useState('20, 50, 100')
+  const [emaColors, setEmaColors] = useState(['#f59e0b', '#a855f7', '#3b82f6'])
+  const [emaColorsInput, setEmaColorsInput] = useState('#f59e0b, #a855f7, #3b82f6')
+  const [bbEnabled, setBbEnabled] = useState(false)
+  const [bbPeriod, setBbPeriod] = useState(20)
+  const [bbStdDev, setBbStdDev] = useState(2)
+  const [rsiEnabled, setRsiEnabled] = useState(false)
+  const [rsiPeriod, setRsiPeriod] = useState(14)
 
   // Timeframe options (must match getTimeframeMs format): lowercase like '1m', '5m', etc
   const TIMEFRAME_OPTIONS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
@@ -438,6 +452,28 @@ export function UploadScreen() {
       setEndDate(new Date(lastBar.time).toISOString().split('T')[0])
     }
 
+    setStep(STEPS.INDICATORS)
+  }
+
+  const handleContinueToAccount = () => {
+    // Parse and save indicator config to store
+    const { setEmaConfig, setBbConfig, setRsiConfig } = useIndStore.getState()
+    
+    // Parse EMA periods from input
+    const periodVals = emaPeriodsInput.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0)
+    if (periodVals.length > 0) {
+      setEmaPeriods(periodVals)
+    }
+    
+    // Parse EMA colors from input
+    const colorVals = emaColorsInput.split(',').map(s => s.trim()).filter(c => c.match(/^#[0-9a-fA-F]{6}$/))
+    if (colorVals.length > 0) {
+      setEmaColors(colorVals)
+    }
+    
+    setEmaConfig(periodVals.length > 0 ? periodVals : emaPeriods, colorVals.length > 0 ? colorVals : emaColors)
+    setBbConfig(bbPeriod, bbStdDev)
+    setRsiConfig(rsiPeriod)
     setStep(STEPS.ACCOUNT)
   }
 
@@ -1124,6 +1160,214 @@ export function UploadScreen() {
         </div>
       )}
 
+      {/* INDICATORS STEP */}
+      {step === STEPS.INDICATORS && (
+        <div style={{ width: '100%', maxWidth: 600 }}>
+          <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 28, marginBottom: 20 }}>
+            <span style={head}>Indicator Configuration</span>
+            <p style={{ color: C.muted, fontSize: 14, marginTop: 8, marginBottom: 16 }}>
+              Configure indicators to display on the chart
+            </p>
+
+            {/* EMA Configuration */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <div
+                  onClick={() => setEmaEnabled(!emaEnabled)}
+                  style={{
+                    width: 44,
+                    height: 24,
+                    borderRadius: 12,
+                    background: emaEnabled ? C.amber : C.surf2,
+                    border: `1px solid ${emaEnabled ? C.amber : C.border2}`,
+                    cursor: 'pointer',
+                    position: 'relative',
+                    transition: 'all .2s',
+                  }}
+                >
+                  <div style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    background: '#fff',
+                    position: 'absolute',
+                    top: 2,
+                    left: emaEnabled ? 22 : 2,
+                    transition: 'left .2s',
+                  }} />
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>EMA (Exponential Moving Average)</div>
+              </div>
+
+              {emaEnabled && (
+                <div style={{ paddingLeft: 56 }}>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Periods (comma-separated, up to 3)</div>
+                  <input
+                    type="text"
+                    value={emaPeriodsInput}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setEmaPeriodsInput(val)
+                      // Only update actual periods if the input is valid
+                      const vals = val.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0)
+                      if (vals.length <= 3) setEmaPeriods(vals)
+                    }}
+                    style={{ ...inp, width: '100%' }}
+                    placeholder="20, 50, 100"
+                  />
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 4, marginBottom: 12 }}>
+                    Current: {emaPeriods.join(', ')}
+                  </div>
+
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Colors (hex, comma-separated)</div>
+                  <input
+                    type="text"
+                    value={emaColorsInput}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setEmaColorsInput(val)
+                      // Only update actual colors if the input is valid
+                      const colors = val.split(',').map(s => s.trim()).filter(c => c.match(/^#[0-9a-fA-F]{6}$/))
+                      if (colors.length <= 3) setEmaColors(colors)
+                    }}
+                    style={{ ...inp, width: '100%' }}
+                    placeholder="#f59e0b, #a855f7, #3b82f6"
+                  />
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
+                    Current: {emaColors.join(', ')}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Bollinger Bands Configuration */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <div
+                  onClick={() => setBbEnabled(!bbEnabled)}
+                  style={{
+                    width: 44,
+                    height: 24,
+                    borderRadius: 12,
+                    background: bbEnabled ? C.blue : C.surf2,
+                    border: `1px solid ${bbEnabled ? C.blue : C.border2}`,
+                    cursor: 'pointer',
+                    position: 'relative',
+                    transition: 'all .2s',
+                  }}
+                >
+                  <div style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    background: '#fff',
+                    position: 'absolute',
+                    top: 2,
+                    left: bbEnabled ? 22 : 2,
+                    transition: 'left .2s',
+                  }} />
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Bollinger Bands</div>
+              </div>
+
+              {bbEnabled && (
+                <div style={{ paddingLeft: 56, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div>
+                    <label style={lbl}>Period</label>
+                    <input
+                      type="number"
+                      value={bbPeriod}
+                      onChange={(e) => setBbPeriod(parseInt(e.target.value) || 20)}
+                      style={{ ...inp }}
+                    />
+                  </div>
+                  <div>
+                    <label style={lbl}>Std Deviation</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={bbStdDev}
+                      onChange={(e) => setBbStdDev(parseFloat(e.target.value) || 2)}
+                      style={{ ...inp }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* RSI Configuration */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <div
+                  onClick={() => setRsiEnabled(!rsiEnabled)}
+                  style={{
+                    width: 44,
+                    height: 24,
+                    borderRadius: 12,
+                    background: rsiEnabled ? C.purple : C.surf2,
+                    border: `1px solid ${rsiEnabled ? C.purple : C.border2}`,
+                    cursor: 'pointer',
+                    position: 'relative',
+                    transition: 'all .2s',
+                  }}
+                >
+                  <div style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    background: '#fff',
+                    position: 'absolute',
+                    top: 2,
+                    left: rsiEnabled ? 22 : 2,
+                    transition: 'left .2s',
+                  }} />
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>RSI (Relative Strength Index)</div>
+              </div>
+
+              {rsiEnabled && (
+                <div style={{ paddingLeft: 56 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <label style={lbl}>Period</label>
+                      <input
+                        type="number"
+                        value={rsiPeriod}
+                        onChange={(e) => setRsiPeriod(parseInt(e.target.value) || 14)}
+                        style={{ ...inp }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 8 }}>
+                    Standard period is 14. Overbought: 70, Oversold: 30
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                onClick={handleContinueToAccount}
+                style={{
+                  background: C.amber,
+                  border: 'none',
+                  color: '#000',
+                  padding: '10px 24px',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontFamily: FONT,
+                  fontWeight: 600,
+                }}
+              >
+                Continue →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ACCOUNT STEP */}
       {/* ACCOUNT STEP */}
       {step === STEPS.ACCOUNT && (
         <div style={{ width: '100%', maxWidth: 600 }}>

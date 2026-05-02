@@ -12,6 +12,18 @@ export function calcEMA(vals, period) {
   return out
 }
 
+/**
+ * Calculate multiple EMAs at once for given periods
+ * Returns an object with period as key and EMA values array as value
+ */
+export function calcEMAs(vals, periods) {
+  const result = {}
+  periods.forEach(period => {
+    result[period] = calcEMA(vals, period)
+  })
+  return result
+}
+
 export function calcRSI(vals, period = 14) {
   const out = new Array(vals.length).fill(null)
   if (vals.length <= period) return out

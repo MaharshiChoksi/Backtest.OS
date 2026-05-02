@@ -42,7 +42,15 @@ The math is precise: P&L accounts for spread, commissions, lot sizes, and the pi
 Every trade's entry price reflects the actual bid/ask spread you'd face in real trading—when you buy, you pay the ask (close + spread). When you sell, you receive the bid (close - spread). Your P&L automatically deducts this realistic spread cost on both entry and exit, so your backtest results match real-world trading conditions.
 
 ### Technical Indicators On Demand
-See EMA-20, EMA-50, Bollinger Bands, and RSI-14 on your charts. Toggle them on and off independently to keep things clean or get overwhelming detail—your choice.
+Configure up to **3 EMA (Exponential Moving Average)** lines with custom periods and colors. Toggle **Bollinger Bands** with adjustable period and standard deviation. Add **RSI (Relative Strength Index)** with your preferred period. All indicators can be enabled/disabled and configured before starting your backtest—tailor the charts exactly how you want them.
+
+**Indicator Configuration Step**:
+After selecting your symbol and before configuring your account, you'll now see an **Indicators** step where you can:
+- **EMA**: Enable/disable and set up to 3 custom periods (e.g., 9, 21, 50) with custom colors
+- **Bollinger Bands**: Enable/disable with adjustable period and standard deviation
+- **RSI**: Enable/disable with custom period (default 14)
+
+Your indicator settings are applied when the backtest starts and displayed on all selected timeframes.
 
 ### ☀️ / 🔅 Light & Dark Themes
 Trading late night? Dark mode is there. Prefer daylight mode? Switch instantly. Your preference sticks around between sessions.
@@ -225,10 +233,10 @@ The journal keeps records of every trade: entry time, price, size, P&L, whether 
 ## What's Next?
 
 Down the road, I will be adding:
-- More customizable indicators (pick your own periods for moving averages, etc.)
 - Session boxes (mark time zones and session ranges on your charts)
 - Support for backtesting multiple symbols at once
 - A performance dashboard with more detailed statistics
+- More built-in indicators (Swing High/Low, MACD, etc.)
 
 But honestly, the current version does what most traders need right now.
 
@@ -285,7 +293,14 @@ Everything stays on your machine. Your data never leaves your browser. We cache 
 
 ## Version History
 
-**V3.1** (Current)
+**V3.2** (Current)
+- **Customizable Indicators**: Configure up to 3 EMA lines with custom periods and colors
+- **Indicator Configuration Step**: New step in upload flow to configure all indicators before backtest
+- **Bollinger Bands**: Configurable period and standard deviation
+- **RSI**: Configurable period (default 14)
+- All indicators can be enabled/disabled and configured per-user preference
+
+**V3.1**
 - **Timezone Selection**: Configure the timezone of your data source for accurate session detection
   - MT4/MT5 brokers often use broker server time (GMT+2 or GMT+3) rather than UTC
   - Select your data's timezone during configuration to enable future session-based features
@@ -345,8 +360,7 @@ Everything stays on your machine. Your data never leaves your browser. We cache 
 ---
 
 ## Future Ideas
-- Let traders customize which indicators they want to apply with specific parameters
-- Will Add more built-in indicators like Session Box, Swing High low.
+- Will Add more built-in indicators like Session Box, Swing High/Low, MACD, etc.
 - Create better performance reporting and analytics dashboards.
 - May add Economic data indicator for the selected period.
 

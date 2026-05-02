@@ -15,6 +15,15 @@ import { RightPanel } from '../trading/RightPanel'
 import { JournalTab } from '../trading/JournalTab'
 import { FONT } from '../../constants'
 
+// Helper to compute all EMA values for given periods
+function calcEMAs(closes, periods) {
+  const result = {}
+  periods.forEach((period) => {
+    result[period] = calcEMA(closes, period)
+  })
+  return result
+}
+
 
 export function Workspace({ onLoadNew }) {
   const [rightWidth, setRightWidth] = useState(310)
@@ -26,7 +35,7 @@ export function Workspace({ onLoadNew }) {
   const selectedTimeframes = useSimStore((s) => s.selectedTimeframes)
   const barsMap = useSimStore((s) => s.barsMap)
   const symbolConfig = useSimStore((s) => s.symbolConfig)
-  const showRsi = useIndicatorStore((s) => s.rsi)
+  const showRsi = useIndicatorStore((s) => s.rsi.enabled)
 
   const _rsiChart = useRef(null)
   const _rsiSeries = useRef(null)
@@ -49,21 +58,29 @@ export function Workspace({ onLoadNew }) {
   const isMultiTimeframe = selectedTimeframes && selectedTimeframes.length > 0 && Object.keys(barsMap).length > 0
   const barData = isMultiTimeframe ? barsMap[selectedTimeframes[0]] : bars
 
+  // Get indicator config from store
+  const indicatorConfig = useIndicatorStore((s) => s)
+  const emaPeriods = indicatorConfig.ema.periods
+  const bbPeriod = indicatorConfig.bb.period
+  const bbStdDev = indicatorConfig.bb.stdDev
+  const rsiPeriod = indicatorConfig.rsi.period
+
   // ── Pre-compute indicators for ALL timeframes in multi-timeframe mode ──
   const allTimeframeData = useMemo(() => {
     if (!isMultiTimeframe) {
       // Single timeframe
       const closes = barData.map((b) => b.close)
       const times = barData.map((b) => b.time)
+      const emaValues = calcEMAs(closes, emaPeriods)
       return {
         'default': {
           bars: barData,
           times,
           closes,
-          ema20: calcEMA(closes, 20),
-          ema50: calcEMA(closes, 50),
-          bb: calcBB(closes, 20, 2),
-          rsi: calcRSI(closes, 14),
+          ema: emaValues,
+          emaPeriods,
+          bb: calcBB(closes, bbPeriod, bbStdDev),
+          rsi: calcRSI(closes, rsiPeriod),
         }
       }
     }
@@ -74,37 +91,41 @@ export function Workspace({ onLoadNew }) {
       const tfBars = barsMap[tf] || []
       const closes = tfBars.map((b) => b.close)
       const times = tfBars.map((b) => b.time)
+      const emaValues = calcEMAs(closes, emaPeriods)
       result[tf] = {
         bars: tfBars,
         times,
         closes,
-        ema20: calcEMA(closes, 20),
-        ema50: calcEMA(closes, 50),
-        bb: calcBB(closes, 20, 2),
-        rsi: calcRSI(closes, 14),
+        ema: emaValues,
+        emaPeriods,
+        bb: calcBB(closes, bbPeriod, bbStdDev),
+        rsi: calcRSI(closes, rsiPeriod),
       }
     })
     return result
-  }, [isMultiTimeframe, barData, selectedTimeframes, barsMap])
+  }, [isMultiTimeframe, barData, selectedTimeframes, barsMap, emaPeriods, bbPeriod, bbStdDev, rsiPeriod])
 
   // Get primary timeframe data
   const primaryTF = isMultiTimeframe ? selectedTimeframes[0] : 'default'
   const times = allTimeframeData[primaryTF]?.times || []
   const closes = allTimeframeData[primaryTF]?.closes || []
-  const ema20v = allTimeframeData[primaryTF]?.ema20 || []
-  const ema50v = allTimeframeData[primaryTF]?.ema50 || []
+  // ema values now stored as object with period keys
+  const emaValues = allTimeframeData[primaryTF]?.ema || {}
   const bbData = allTimeframeData[primaryTF]?.bb || { mid: [], upper: [], lower: [] }
   const rsiVals = allTimeframeData[primaryTF]?.rsi || []
+
+  // Build ema20v, ema50v etc for backward compatibility
+  const ema20v = emaValues[20] || []
+  const ema50v = emaValues[50] || []
+  const ema100v = emaValues[100] || []
 
   // ── Chart series refs (populated by ChartPane / RsiPane) ──
   // Create all refs at component level (NOT inside useMemo/useEffect)
 
-  // For single timeframe
+  // For single timeframe - support up to 5 EMAs
   const _chart = useRef(null)
   const _candle = useRef(null)
   const _vol = useRef(null)
-  const _ema20 = useRef(null)
-  const _ema50 = useRef(null)
   const _bbMid = useRef(null)
   const _bbUp = useRef(null)
   const _bbLow = useRef(null)
@@ -113,8 +134,6 @@ export function Workspace({ onLoadNew }) {
   const _chart1 = useRef(null)
   const _candle1 = useRef(null)
   const _vol1 = useRef(null)
-  const _ema201 = useRef(null)
-  const _ema501 = useRef(null)
   const _bbMid1 = useRef(null)
   const _bbUp1 = useRef(null)
   const _bbLow1 = useRef(null)
@@ -122,8 +141,6 @@ export function Workspace({ onLoadNew }) {
   const _chart2 = useRef(null)
   const _candle2 = useRef(null)
   const _vol2 = useRef(null)
-  const _ema202 = useRef(null)
-  const _ema502 = useRef(null)
   const _bbMid2 = useRef(null)
   const _bbUp2 = useRef(null)
   const _bbLow2 = useRef(null)
@@ -131,8 +148,6 @@ export function Workspace({ onLoadNew }) {
   const _chart3 = useRef(null)
   const _candle3 = useRef(null)
   const _vol3 = useRef(null)
-  const _ema203 = useRef(null)
-  const _ema503 = useRef(null)
   const _bbMid3 = useRef(null)
   const _bbUp3 = useRef(null)
   const _bbLow3 = useRef(null)
@@ -142,11 +157,11 @@ export function Workspace({ onLoadNew }) {
     const map = {}
     if (isMultiTimeframe && selectedTimeframes.length > 0) {
       // Map each selected timeframe to its ref set
-      const refSets = [
-        { chart: _chart1, candle: _candle1, vol: _vol1, ema20: _ema201, ema50: _ema501, bbMid: _bbMid1, bbUp: _bbUp1, bbLow: _bbLow1 },
-        { chart: _chart2, candle: _candle2, vol: _vol2, ema20: _ema202, ema50: _ema502, bbMid: _bbMid2, bbUp: _bbUp2, bbLow: _bbLow2 },
-        { chart: _chart3, candle: _candle3, vol: _vol3, ema20: _ema203, ema50: _ema503, bbMid: _bbMid3, bbUp: _bbUp3, bbLow: _bbLow3 },
-      ]
+       const refSets = [
+         { chart: _chart1, candle: _candle1, vol: _vol1, ema: {}, bbMid: _bbMid1, bbUp: _bbUp1, bbLow: _bbLow1 },
+         { chart: _chart2, candle: _candle2, vol: _vol2, ema: {}, bbMid: _bbMid2, bbUp: _bbUp2, bbLow: _bbLow2 },
+         { chart: _chart3, candle: _candle3, vol: _vol3, ema: {}, bbMid: _bbMid3, bbUp: _bbUp3, bbLow: _bbLow3 },
+       ]
       selectedTimeframes.forEach((tf, idx) => {
         if (idx < refSets.length) {
           map[tf] = refSets[idx]
@@ -154,7 +169,7 @@ export function Workspace({ onLoadNew }) {
       })
     } else {
       // Single timeframe
-      map['default'] = { chart: _chart, candle: _candle, vol: _vol, ema20: _ema20, ema50: _ema50, bbMid: _bbMid, bbUp: _bbUp, bbLow: _bbLow }
+       map['default'] = { chart: _chart, candle: _candle, vol: _vol, ema: {}, bbMid: _bbMid, bbUp: _bbUp, bbLow: _bbLow }
     }
     return map
   }, [isMultiTimeframe, selectedTimeframes])
@@ -184,8 +199,8 @@ export function Workspace({ onLoadNew }) {
   const { seekTo, step, cursorRef } = useSimEngine({
     bars: allTimeframeData[primaryTF].bars,
     times,
-    ema20v,
-    ema50v,
+    emaValues: emaValues,
+    emaPeriods: emaPeriods,
     bbData,
     rsiVals,
     isMultiTimeframe,
@@ -347,7 +362,7 @@ export function Workspace({ onLoadNew }) {
             overflow: 'auto',
             background: C.surf,
           }}>
-            <LeftSidebar ema20v={[]} ema50v={[]} bbData={{}} rsiVals={[]} />
+            <LeftSidebar emaValues={emaValues} bbData={bbData} rsiVals={rsiVals} />
           </div>
 
           {/* Right: Full-height Journal */}
@@ -395,7 +410,7 @@ export function Workspace({ onLoadNew }) {
       <Header onLoadNew={onLoadNew} />
 
       <div style={{ display: 'flex', flex: 1, minWidth: 0, overflow: 'hidden' }}>
-        <LeftSidebar ema20v={ema20v} ema50v={ema50v} bbData={bbData} rsiVals={rsiVals} />
+        <LeftSidebar emaValues={emaValues} bbData={bbData} rsiVals={rsiVals} />
 
         {/* Chart column */}
         <div style={{ display: 'flex', flex: 1, minWidth: 0, flexDirection: 'column', overflow: 'hidden', borderRight: `1px solid ${C.border}` }}>
@@ -413,8 +428,8 @@ export function Workspace({ onLoadNew }) {
                 chartR={chartRefsMap[primaryTF]}
                 bars={barData}
                 times={times}
-                ema20v={ema20v}
-                ema50v={ema50v}
+                emaValues={emaValues}
+                emaPeriods={emaPeriods}
                 bbData={bbData}
                 symbolConfig={symbolConfig}
               />
@@ -427,7 +442,7 @@ export function Workspace({ onLoadNew }) {
               bars={barData}
               times={times}
               rsiVals={rsiVals}
-              mainChartRef={chartRefsMap[primaryTF]}
+              mainChartRef={chartRefsMap[primaryTF]?.chart}
             />
           )}
         </div>

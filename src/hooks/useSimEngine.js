@@ -18,9 +18,11 @@ const R33 = '#f0505033'
  * - High-performance hot loop: refs-only state during playback
  * - Speed controls: 1x, 5x, 10x, 50x, MAX
  */
-export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, rsiR }) {
-  // For backwards compatibility with single-timeframe mode, build chartR
-  const chartR = isMultiTimeframe ? simChartData[primaryTF]?.refs : { candle: { current: null }, vol: { current: null }, ema20: { current: null }, ema50: { current: null }, bbMid: { current: null }, bbUp: { current: null }, bbLow: { current: null } }
+export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, rsiR }) {
+  // chartR always comes from simChartData refs — never build a fake ref object here.
+  // Calling useRef() conditionally inside an expression violates Rules of Hooks.
+  // Workspace.jsx owns all refs; this hook just reads them.
+  const chartR = simChartData[primaryTF]?.refs
 
   // ── Ref mirrors for all hot-loop state ────────────────────
   const cursorRef = useRef(useSimStore.getState().cursor)
@@ -105,7 +107,12 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
 
   // ── Update a single chart with bar data ──
   const updateSingleChart = useCallback((refs, barData, idx, ic, data) => {
-    if (!refs || !refs.candle?.current) return
+    // console.log(`updateSingleChart: refs?.candle?.current=${!!refs?.candle?.current}, refs?.emaRefs?.current=${!!refs?.emaRefs?.current}`)
+
+    if (!refs || !refs.candle?.current) {
+      // console.log(`updateSingleChart: early return - no candle ref`)
+      return
+    }
 
     // Candlestick
     refs.candle.current?.update(barData)
@@ -117,23 +124,26 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
       color: barData.close >= barData.open ? G33 : R33,
     })
 
-    // EMA20
-    if (ic.ema20 && data.ema20 && data.ema20[idx] !== null) {
-      refs.ema20.current?.update({ time: barData.time, value: data.ema20[idx] })
+    // EMA lines — refs.ema is a plain object keyed by period: { 20: { current: lineSeries }, 50: ... }
+    const emaData = data.ema || {}
+    if (ic.ema.enabled && refs.ema) {
+      Object.entries(refs.ema).forEach(([period, ref]) => {
+        const values = emaData[Number(period)]
+        if (values && idx < values.length && values[idx] !== null && ref?.current) {
+          const t = barData.time
+          const time = typeof t === 'string' ? Number(t) : Math.floor(t)  // guarantee number
+          ref.current.update({ time, value: values[idx] })
+        }
+      })
     }
 
-    // EMA50
-    if (ic.ema50 && data.ema50 && data.ema50[idx] !== null) {
-      refs.ema50.current?.update({ time: barData.time, value: data.ema50[idx] })
-    }
-
-    // Bollinger Bands
-    if (ic.bb && data.bb && data.bb.upper[idx] !== null) {
+    // Bollinger Bands - check enabled flag
+    if (ic.bb.enabled && data.bb && data.bb.upper[idx] !== null) {
       refs.bbMid.current?.update({ time: barData.time, value: data.bb.mid[idx] })
       refs.bbUp.current?.update({ time: barData.time, value: data.bb.upper[idx] })
       refs.bbLow.current?.update({ time: barData.time, value: data.bb.lower[idx] })
     }
-  }, [])
+  }, [emaPeriods])
 
   // ── Chart update for a single bar (all timeframes) ──
   const updateChartForBar = useCallback(
@@ -144,13 +154,15 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
       const barForChart = { ...bar, time: msToSeconds(bar.time) }
 
       // Update primary chart (or single chart)
-      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema20: ema20v, ema50: ema50v, bb: bbData, rsi: rsiVals }
+      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema: emaValues, bb: bbData, rsi: rsiVals }
       const primaryRefs = isMultiTimeframe ? simChartData[primaryTF]?.refs : chartR
+
+      // console.log(`primaryRefs:`, primaryRefs, `primaryRefs.candle?.current:`, !!primaryRefs?.candle?.current)
 
       updateSingleChart(primaryRefs, barForChart, idx, ic, primaryData)
 
       // Update RSI (only in single timeframe mode)
-      if (ic.rsi && rsiVals[idx] !== null) {
+      if (ic.rsi.enabled && rsiVals && rsiVals[idx] !== null) {
         rsiR.series.current?.update({ time: barForChart.time, value: rsiVals[idx] })
         rsiR.ob.current?.update({ time: barForChart.time, value: 70 })
         rsiR.os.current?.update({ time: barForChart.time, value: 30 })
@@ -187,12 +199,13 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
         })
       }
     },
-    [chartR, rsiR, ema20v, ema50v, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, updateSingleChart, findCompletedBarIndex],
+    [chartR, rsiR, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, updateSingleChart, findCompletedBarIndex],
   )
 
   // ── processBar — chart update + trade fill evaluation ─────
   const processBar = useCallback(
     (bar, idx) => {
+      // console.log(`processBar: idx=${idx}, bar.time=${bar.time}`)
       updateChartForBar(bar, idx)
       evaluateFillsRef.current?.(bar, symbolConfigRef.current, accountConfigRef.current)
     },
@@ -230,24 +243,36 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
       }))
 
       // Update primary chart (or single chart)
-      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema20: ema20v, ema50: ema50v, bb: bbData, rsi: rsiVals, times }
+      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema: emaValues, bb: bbData, rsi: rsiVals, times }
       const primaryRefs = isMultiTimeframe ? simChartData[primaryTF]?.refs : chartR
 
       primaryRefs.candle.current?.setData(candleData)
       primaryRefs.vol.current?.setData(volData)
-      primaryRefs.ema20.current?.setData(ic.ema20 ? buildLine(primaryData.ema20, target, primaryData.times) : [])
-      primaryRefs.ema50.current?.setData(ic.ema50 ? buildLine(primaryData.ema50, target, primaryData.times) : [])
+
+      // Update EMA lines
+      if (ic.ema.enabled && primaryRefs.ema) {
+        const emaData = isMultiTimeframe ? simChartData[primaryTF]?.data?.ema : emaValues
+        Object.entries(primaryRefs.ema).forEach(([period, ref]) => {
+          const values = emaData?.[Number(period)]
+          ref?.current?.setData(values ? buildLine(values, target, times) : [])
+        })
+      } else if (primaryRefs.ema) {
+        Object.values(primaryRefs.ema).forEach(ref => ref?.current?.setData([]))
+      }
+
+      // Update BB
       if (ic.bb) {
-        primaryRefs.bbMid.current?.setData(buildLine(primaryData.bb.mid, target, primaryData.times))
-        primaryRefs.bbUp.current?.setData(buildLine(primaryData.bb.upper, target, primaryData.times))
-        primaryRefs.bbLow.current?.setData(buildLine(primaryData.bb.lower, target, primaryData.times))
+        primaryRefs.bbMid.current?.setData(buildLine(bbData.mid, target, times))
+        primaryRefs.bbUp.current?.setData(buildLine(bbData.upper, target, times))
+        primaryRefs.bbLow.current?.setData(buildLine(bbData.lower, target, times))
       } else {
         primaryRefs.bbMid.current?.setData([])
         primaryRefs.bbUp.current?.setData([])
         primaryRefs.bbLow.current?.setData([])
       }
 
-      if (ic.rsi) {
+      // Update RSI
+      if (ic.rsi.enabled) {
         rsiR.series.current?.setData(buildLine(rsiVals, target, times))
         const slicedBars = bars.slice(0, target)
         rsiR.ob.current?.setData(slicedBars.map(b => ({ time: msToSeconds(b.time), value: 70 })))
@@ -276,8 +301,9 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
             // No completed bars yet - clear the chart
             tfRefs.candle.current?.setData([])
             tfRefs.vol.current?.setData([])
-            tfRefs.ema20.current?.setData([])
-            tfRefs.ema50.current?.setData([])
+            if (tfRefs.ema) {
+              Object.values(tfRefs.ema).forEach(ref => ref?.current?.setData([]))
+            }
             tfRefs.bbMid.current?.setData([])
             tfRefs.bbUp.current?.setData([])
             tfRefs.bbLow.current?.setData([])
@@ -297,8 +323,18 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
           // Update this timeframe's chart
           tfRefs.candle.current?.setData(tfCandleData)
           tfRefs.vol.current?.setData(tfVolData)
-          tfRefs.ema20.current?.setData(ic.ema20 ? buildLine(tfData.ema20, tfTarget + 1, tfData.times) : [])
-          tfRefs.ema50.current?.setData(ic.ema50 ? buildLine(tfData.ema50, tfTarget + 1, tfData.times) : [])
+
+           // Update EMA lines
+           if (ic.ema.enabled && tfRefs.ema) {
+             Object.entries(tfRefs.ema).forEach(([period, ref]) => {
+               const values = tfData.ema?.[Number(period)]
+               if (values && ref?.current) {
+                 ref.current.setData(values ? buildLine(values, tfTarget + 1, tfData.times) : [])
+               }
+             })
+           }
+
+          // Update BB
           if (ic.bb) {
             tfRefs.bbMid.current?.setData(buildLine(tfData.bb.mid, tfTarget + 1, tfData.times))
             tfRefs.bbUp.current?.setData(buildLine(tfData.bb.upper, tfTarget + 1, tfData.times))
@@ -311,7 +347,7 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
         })
       }
     },
-    [bars, times, chartR, rsiR, ema20v, ema50v, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, findCompletedBarIndex],
+    [bars, times, chartR, rsiR, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, findCompletedBarIndex],
   )
 
   // ── HOT LOOP ─────────────────────────────────────────────
@@ -333,6 +369,7 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
         return
       }
 
+      // console.log(`tick: cur=${cur}, bar.time=${bars[cur]?.time}`)
       processBar(bars[cur], cur)
       cursorRef.current = cur + 1
 
@@ -351,14 +388,12 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
         genId++
         shouldTick = true
         if (tickId) clearTimeout(tickId)
-        tickId = null
         tick(genId)
       }
       if (!s.playing && prev && prev.playing) {
         genId++
         shouldTick = false
         if (tickId) clearTimeout(tickId)
-        tickId = null
       }
     })
 
