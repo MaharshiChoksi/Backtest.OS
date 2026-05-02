@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { createChart, CrosshairMode } from 'lightweight-charts'
 import { useTheme, useThemeStore } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
+import { useIndicatorStore } from '../../store/useIndicatorStore'
 import { buildLine } from '../../utils/indicators'
 import { msToSeconds } from '../../utils/tradingUtils'
 
@@ -16,6 +17,8 @@ export function RsiPane({ rsiR, bars, times, rsiVals, mainChartRef }) {
   const C = useTheme()
   const dark = useThemeStore((s) => s.dark)
   const cursor = useSimStore((s) => s.cursor)
+  const indic = useIndicatorStore()
+  const rsiPeriod = indic.rsi.period
 
   useEffect(() => {
     if (!containerRef.current || !bars.length) return
@@ -66,11 +69,27 @@ export function RsiPane({ rsiR, bars, times, rsiVals, mainChartRef }) {
       if (range) chart.timeScale().setVisibleLogicalRange(range)
     }
     const syncMainFromRsi = (range) => {
-      if (range) mainChartRef.current?.timeScale().setVisibleLogicalRange(range)
+      if (range && mainChartRef.current) mainChartRef.current.timeScale().setVisibleLogicalRange(range)
     }
 
     mainChartRef.current?.timeScale().subscribeVisibleLogicalRangeChange(syncRsiFromMain)
     chart.timeScale().subscribeVisibleLogicalRangeChange(syncMainFromRsi)
+
+    // ── Sync crosshair movement ──
+    const handleMainCrosshairMove = (param) => {
+      if (param && param.time) {
+        // Set crosshair on RSI chart at the same time position
+        chart.setCrosshairPosition(
+          { price: 50, time: param.time },
+          rsiSeries
+        )
+      } else {
+        chart.clearCrosshairPosition()
+      }
+    }
+    
+    // Subscribe to main chart's crosshair moves
+    mainChartRef.current?.subscribeCrosshairMove(handleMainCrosshairMove)
 
     rsiR.series.current = rsiSeries
     rsiR.ob.current = ob
@@ -78,6 +97,7 @@ export function RsiPane({ rsiR, bars, times, rsiVals, mainChartRef }) {
 
     return () => {
       mainChartRef.current?.timeScale().unsubscribeVisibleLogicalRangeChange(syncRsiFromMain)
+      mainChartRef.current?.unsubscribeCrosshairMove(handleMainCrosshairMove)
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(syncMainFromRsi)
       chart.remove()
       rsiR.chart.current = null
@@ -99,7 +119,7 @@ export function RsiPane({ rsiR, bars, times, rsiVals, mainChartRef }) {
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
       <span style={{ position: 'absolute', top: 4, left: 8, fontSize: 11, color: C.purple, letterSpacing: '1px', zIndex: 10, pointerEvents: 'none' }}>
-        RSI 14
+        RSI {rsiPeriod}
       </span>
       <div ref={containerRef} style={{ height: 100 }} />
     </div>

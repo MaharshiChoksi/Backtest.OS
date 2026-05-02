@@ -15,19 +15,30 @@ export function LeftSidebar({ ema20v, ema50v, bbData, rsiVals }) {
   const analysisMode = useSimStore((s) => s.analysisMode)
   const bars = useSimStore((s) => s.bars)
   const trades = useTradeStore((s) => s.trades)
+  const indic = useIndicatorStore()
+
+  // Build EMA values map for display
+  const emaValues = useMemo(() => {
+    const result = {}
+    if (indic.ema.enabled && ema20v && ema50v) {
+      result[20] = ema20v
+      result[50] = ema50v
+    }
+    return result
+  }, [indic.ema.enabled, ema20v, ema50v])
 
   return (
-    <div style={{ width: 230, background: C.surf, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
+    <div style={{ width: 250, background: C.surf, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
       <TabBar tabs={['info', 'indic']} active={tab} onChange={setTab} />
       <div style={{ flex: 1, overflow: 'auto', padding: 14 }}>
         {tab === 'info'  && <InfoTab />}
-        {tab === 'indic' && !analysisMode && <IndicTab ema20v={ema20v} ema50v={ema50v} bbData={bbData} rsiVals={rsiVals} />}
+        {tab === 'indic' && !analysisMode && <IndicTab emaValues={emaValues} bbData={bbData} rsiVals={rsiVals} indic={indic} />}
       </div>
     </div>
   )
 }
 
-// ── INFO tab ──────────────────────────────────────────────────
+// ── INFO tab ─────────────────────────────────────────
 function InfoTab() {
   const C        = useTheme()
   const bars     = useSimStore((s) => s.bars)
@@ -145,10 +156,9 @@ function InfoTab() {
   )
 }
 
-// ── INDIC tab ─────────────────────────────────────────────────
-function IndicTab({ ema20v, ema50v, bbData, rsiVals }) {
+// ── INDIC tab ─────────────────────────────────────────
+function IndicTab({ emaValues, bbData, rsiVals, indic }) {
   const C        = useTheme()
-  const indic    = useIndicatorStore()
   const cursor   = useSimStore((s) => s.cursor)
   const bars     = useSimStore((s) => s.bars)
   const symbolConfig = useSimStore((s) => s.symbolConfig)
@@ -161,46 +171,52 @@ function IndicTab({ ema20v, ema50v, bbData, rsiVals }) {
     [symbolConfig]
   )
 
-  const OVERLAYS = [
-    { key: 'ema20', label: 'EMA 20',          color: C.amber  },
-    { key: 'ema50', label: 'EMA 50',          color: C.purple },
-    { key: 'bb',    label: 'Bollinger (20,2)', color: C.blue   },
-  ]
-
   return (
     <>
       <SectionHeader>Overlay</SectionHeader>
-      {OVERLAYS.map(({ key, label, color }) => (
-        <div
-          key={key}
-          onClick={() => indic.toggle(key)}
-          style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 0', cursor: 'pointer', borderBottom: `1px solid ${C.border}22` }}
-        >
-          <div style={{ width: 12, height: 12, borderRadius: 2, background: indic[key] ? color : C.surf3, border: `1px solid ${indic[key] ? color : C.border2}`, flexShrink: 0, transition: 'all .15s' }} />
-          <div style={{ width: 18, height: 2, background: color, opacity: indic[key] ? 1 : 0.15, flexShrink: 0 }} />
-          <span style={{ fontSize: 12, color: indic[key] ? C.text : C.muted, fontFamily: FONT }}>{label}</span>
-        </div>
-      ))}
+      {/* EMA toggle */}
+      <div
+        onClick={() => indic.toggleIndicator('ema')}
+        style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 0', cursor: 'pointer', borderBottom: `1px solid ${C.border}22` }}
+      >
+        <div style={{ width: 12, height: 12, borderRadius: 2, background: indic.ema.enabled ? C.amber : C.surf3, border: `1px solid ${indic.ema.enabled ? C.amber : C.border2}`, flexShrink: 0, transition: 'all .15s' }} />
+        <div style={{ width: 18, height: 2, background: C.amber, opacity: indic.ema.enabled ? 1 : 0.15, flexShrink: 0 }} />
+        <span style={{ fontSize: 12, color: indic.ema.enabled ? C.text : C.muted, fontFamily: FONT }}>EMA ({indic.ema.periods.join(', ')})</span>
+      </div>
+
+      {/* BB toggle */}
+      <div
+        onClick={() => indic.toggleIndicator('bb')}
+        style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 0', cursor: 'pointer', borderBottom: `1px solid ${C.border}22` }}
+      >
+        <div style={{ width: 12, height: 12, borderRadius: 2, background: indic.bb.enabled ? C.blue : C.surf3, border: `1px solid ${indic.bb.enabled ? C.blue : C.border2}`, flexShrink: 0, transition: 'all .15s' }} />
+        <div style={{ width: 18, height: 2, background: C.blue, opacity: indic.bb.enabled ? 1 : 0.15, flexShrink: 0 }} />
+        <span style={{ fontSize: 12, color: indic.bb.enabled ? C.text : C.muted, fontFamily: FONT }}>Bollinger ({indic.bb.period}, {indic.bb.stdDev})</span>
+      </div>
 
       <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
       <SectionHeader>Sub-Pane</SectionHeader>
 
-      <div onClick={() => indic.toggle('rsi')} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 0', cursor: 'pointer' }}>
-        <div style={{ width: 12, height: 12, borderRadius: 2, background: indic.rsi ? C.purple : C.surf3, border: `1px solid ${indic.rsi ? C.purple : C.border2}`, flexShrink: 0, transition: 'all .15s' }} />
-        <span style={{ fontSize: 12, color: indic.rsi ? C.text : C.muted, fontFamily: FONT }}>RSI (14)</span>
-        {indic.rsi && rsiVals[cursor - 1] !== null && (
+      <div onClick={() => indic.toggleIndicator('rsi')} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 0', cursor: 'pointer' }}>
+        <div style={{ width: 12, height: 12, borderRadius: 2, background: indic.rsi.enabled ? C.purple : C.surf3, border: `1px solid ${indic.rsi.enabled ? C.purple : C.border2}`, flexShrink: 0, transition: 'all .15s' }} />
+        <span style={{ fontSize: 12, color: indic.rsi.enabled ? C.text : C.muted, fontFamily: FONT }}>RSI ({indic.rsi.period})</span>
+        {indic.rsi.enabled && rsiVals[cursor - 1] !== null && (
           <span style={{ ...pill(C.purple), marginLeft: 'auto' }}>{rsiVals[cursor - 1]?.toFixed(1)}</span>
         )}
       </div>
 
       {/* Live values */}
-      {(indic.ema20 || indic.ema50 || indic.bb) && (
+      {(indic.ema.enabled || indic.bb.enabled) && (
         <>
           <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
           <SectionHeader>Live Values</SectionHeader>
-          {indic.ema20 && ema20v[cursor - 1] !== null && <Kv label="EMA 20"    value={fmt(ema20v[cursor - 1], dec)} color={C.amber}  />}
-          {indic.ema50 && ema50v[cursor - 1] !== null && <Kv label="EMA 50"    value={fmt(ema50v[cursor - 1], dec)} color={C.purple} />}
-          {indic.bb    && bbData.upper[cursor - 1] !== null && (
+          {indic.ema.enabled && indic.ema.periods.map((period) => {
+            const values = emaValues[period]
+            return values && values[cursor - 1] !== null ? (
+              <Kv key={period} label={`EMA ${period}`} value={fmt(values[cursor - 1], dec)} color={indic.ema.colors[indic.ema.periods.indexOf(period)] || C.amber} />
+            ) : null
+          })}
+          {indic.bb.enabled && bbData.upper && bbData.upper[cursor - 1] !== null && (
             <>
               <Kv label="BB Upper" value={fmt(bbData.upper[cursor - 1], dec)} color={C.blue} />
               <Kv label="BB Mid"   value={fmt(bbData.mid[cursor - 1],   dec)} color={C.blue + 'aa'} />

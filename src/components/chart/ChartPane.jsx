@@ -11,7 +11,7 @@ import { getDecimalPlaces, msToSeconds } from '../../utils/tradingUtils'
  * Renders the main candlestick + overlay chart.
  * Populates `chartR` refs on mount so the sim engine can call .update() directly.
  */
-export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolConfig }) {
+export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, symbolConfig }) {
   const containerRef = useRef(null)
   const lastSizeRef = useRef({ width: 0, height: 0 })
   const resizeObserverRef = useRef(null)
@@ -28,7 +28,7 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
   // Get decimal places from symbol config
   const decimals = symbolConfig ? getDecimalPlaces(symbolConfig.tick_size) : 5
 
-  // ── Initialize chart on first mount (or when bars change) ──
+  // ── Initialize chart on first mount (or when bars/symbol/indicators change) ──
   useEffect(() => {
     // Guard: need container, bars, and symbolConfig
     if (!containerRef.current || !bars || bars.length === 0 || !symbolConfig) {
@@ -90,15 +90,30 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
     })
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: false })
 
-    // ── Overlay line series ──
+    // ── Overlay line series for EMAs ──
     const mkLine = (color, w = 1, style = 0) =>
       chart.addLineSeries({ color, lineWidth: w, lastValueVisible: false, priceLineVisible: false, lineStyle: style })
 
-    const e20 = mkLine(C.amber)
-    const e50 = mkLine(C.purple)
-    const bMid = mkLine(C.blue + 'aa')
-    const bUp = mkLine(C.blue + '55')
-    const bLow = mkLine(C.blue + '55')
+    // Create EMA lines based on config
+    const emaLines = {}
+    chartR.ema = {}  // keyed by period number
+
+    if (indic.ema.enabled && emaPeriods) {
+      emaPeriods.forEach((period, idx) => {
+        const color = indic.ema.colors[idx] || C.amber
+        const line = mkLine(color)
+        emaLines[period] = line
+        chartR.ema[period] = { current: line }  // sim engine reads refs.ema[period].current
+      })
+    }
+
+    // Bollinger Bands lines - only create if enabled
+    let bMid, bUp, bLow
+    if (indic.bb.enabled) {
+      bMid = mkLine(C.blue + 'aa')
+      bUp = mkLine(C.blue + '55')
+      bLow = mkLine(C.blue + '55')
+    }
 
     // ── Seed initial data up to current cursor ──
     const slice = bars.slice(0, cursor)
@@ -112,11 +127,23 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
 
     candle.setData(candleData)
     vol.setData(volData)
-    e20.setData(indic.ema20 ? buildLine(ema20v, cursor, times) : [])
-    e50.setData(indic.ema50 ? buildLine(ema50v, cursor, times) : [])
-    bMid.setData(indic.bb ? buildLine(bbData.mid, cursor, times) : [])
-    bUp.setData(indic.bb ? buildLine(bbData.upper, cursor, times) : [])
-    bLow.setData(indic.bb ? buildLine(bbData.lower, cursor, times) : [])
+
+    // Set EMA data
+    if (indic.ema.enabled && emaValues && emaPeriods) {
+      emaPeriods.forEach((period) => {
+        const values = emaValues[period]
+        if (emaLines[period] && values) {
+          emaLines[period].setData(buildLine(values, cursor, times))
+        }
+      })
+    }
+
+    // Set BB data - only if enabled
+    if (indic.bb.enabled && bbData) {
+      bMid?.setData(buildLine(bbData.mid, cursor, times))
+      bUp?.setData(buildLine(bbData.upper, cursor, times))
+      bLow?.setData(buildLine(bbData.lower, cursor, times))
+    }
 
     // ── Adjust price scale to show more granular price levels ──
     chart.priceScale('right').applyOptions({
@@ -136,8 +163,6 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
     chartR.chart.current = chart
     chartR.candle.current = candle
     chartR.vol.current = vol
-    chartR.ema20.current = e20
-    chartR.ema50.current = e50
     chartR.bbMid.current = bMid
     chartR.bbUp.current = bUp
     chartR.bbLow.current = bLow
@@ -166,13 +191,13 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
       chartR.chart.current = null
       chartR.candle.current = null
       chartR.vol.current = null
-      chartR.ema20.current = null
-      chartR.ema50.current = null
       chartR.bbMid.current = null
       chartR.bbUp.current = null
       chartR.bbLow.current = null
+      // Clear EMA refs
+      chartR.ema = {}
     }
-  }, [bars, symbolConfig]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bars, symbolConfig, indic.ema.enabled, indic.bb.enabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Update chart theme when dark/light toggles ────────────
   useEffect(() => {
@@ -196,17 +221,19 @@ export function ChartPane({ chartR, bars, times, ema20v, ema50v, bbData, symbolC
   // ── Trigger resize check on cursor changes (for during playback) ──
   useEffect(() => {
     if (!chartR.chart.current || !containerRef.current) return
-    
+
     const currentWidth = containerRef.current.clientWidth
     const currentHeight = containerRef.current.clientHeight
-    
-    if (currentWidth > 0 && currentHeight > 0 && 
-        (currentWidth !== lastSizeRef.current.width || 
-         currentHeight !== lastSizeRef.current.height)) {
+
+    if (currentWidth > 0 && currentHeight > 0 &&
+      (currentWidth !== lastSizeRef.current.width ||
+        currentHeight !== lastSizeRef.current.height)) {
       lastSizeRef.current = { width: currentWidth, height: currentHeight }
       chartR.chart.current?.resize(currentWidth, currentHeight)
     }
   }, [cursor, chartR])
+
+  // Trade markers effect
   useEffect(() => {
     if (!chartR.chart.current || !bars.length) return
 
