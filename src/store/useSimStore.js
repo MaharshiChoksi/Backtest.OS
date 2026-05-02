@@ -15,23 +15,51 @@ export const useSimStore = create((set, get) => ({
   timeframe: '1h',
   timezone: 0,  // Offset in hours from UTC (e.g., 3 for GMT+3)
   timezoneLabel: 'UTC',  // Display label (e.g., 'GMT+3')
-  
+
   // Multi-timeframe support
   selectedTimeframes: ['1h'],
   barsMap: {},
 
+  // Metrics analysis filters
+  metricsFilters: {
+    startDate: null,
+    endDate: null,
+    pair: null,
+    account: null,
+  },
+  metricsLoading: false,
+  // Add to initial state:
+  backtestStartDate: null,  // yyyy-mm-dd string from upload screen
+  backtestEndDate: null,
+
+  // Add action:
+  setBacktestDateRange: (startDate, endDate) => set({ backtestStartDate: startDate, backtestEndDate: endDate }),
+
+  // Set metrics filters
+  setMetricsFilters: (filters) => set((state) => ({
+    metricsFilters: { ...state.metricsFilters, ...filters }
+  })),
+
+  // Reset metrics filters
+  resetMetricsFilters: () => set({
+    metricsFilters: { startDate: null, endDate: null, pair: null, account: null }
+  }),
+
+  // Set metrics loading state
+  setMetricsLoading: (loading) => set({ metricsLoading: loading }),
+
   /** Load a new session — replaces bars and resets cursor */
   loadSession: (bars, fileName) =>
     set({ bars, fileName, cursor: Math.min(30, bars.length), playing: false, analysisMode: false }),
-  
+
   /** Load multi-timeframe session */
   loadMultiTimeframeSession: (barsMap, selectedTimeframes, fileName, timezone = 0, timezoneLabel = 'UTC') =>
-    set({ 
+    set({
       bars: barsMap[selectedTimeframes[0]] || [],  // Set bars to first timeframe for navigation
-      barsMap, 
-      selectedTimeframes, 
-      fileName, 
-      cursor: Math.min(30, barsMap[selectedTimeframes[0]]?.length || 0), 
+      barsMap,
+      selectedTimeframes,
+      fileName,
+      cursor: Math.min(30, barsMap[selectedTimeframes[0]]?.length || 0),
       playing: false,
       analysisMode: false,
       timezone,
@@ -58,7 +86,7 @@ export const useSimStore = create((set, get) => ({
 
   /** Enable analysis mode - clears market data but keeps symbol/account config */
   enterAnalysisMode: () =>
-    set((s) => ({ 
+    set((s) => ({
       playing: false,
       bars: [],  // Clear market data
       barsMap: {},
@@ -68,17 +96,17 @@ export const useSimStore = create((set, get) => ({
 
   /** Exit analysis mode - go back to upload screen */
   exitAnalysisMode: () =>
-    set({ 
-      bars: [], 
-      fileName: '', 
-      cursor: 30, 
-      playing: false, 
-      speed: 1, 
-      hoverBar: null, 
-      symbolConfig: null, 
-      accountConfig: null, 
-      timeframe: '1h', 
-      barsMap: {}, 
+    set({
+      bars: [],
+      fileName: '',
+      cursor: 30,
+      playing: false,
+      speed: 1,
+      hoverBar: null,
+      symbolConfig: null,
+      accountConfig: null,
+      timeframe: '1h',
+      barsMap: {},
       selectedTimeframes: ['1h'],
       analysisMode: false,
     }),

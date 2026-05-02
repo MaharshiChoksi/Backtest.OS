@@ -11,13 +11,17 @@ import { TabBar, Kv, SectionHeader, Divider, pill }  from '../ui/atoms'
 export function LeftSidebar({ ema20v, ema50v, bbData, rsiVals }) {
   const C       = useTheme()
   const [tab, setTab] = useState('info')
+  const enterAnalysisMode = useSimStore((s) => s.enterAnalysisMode)
+  const analysisMode = useSimStore((s) => s.analysisMode)
+  const bars = useSimStore((s) => s.bars)
+  const trades = useTradeStore((s) => s.trades)
 
   return (
-    <div style={{ width: 210, background: C.surf, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
+    <div style={{ width: 230, background: C.surf, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
       <TabBar tabs={['info', 'indic']} active={tab} onChange={setTab} />
       <div style={{ flex: 1, overflow: 'auto', padding: 14 }}>
         {tab === 'info'  && <InfoTab />}
-        {tab === 'indic' && <IndicTab ema20v={ema20v} ema50v={ema50v} bbData={bbData} rsiVals={rsiVals} />}
+        {tab === 'indic' && !analysisMode && <IndicTab ema20v={ema20v} ema50v={ema50v} bbData={bbData} rsiVals={rsiVals} />}
       </div>
     </div>
   )
@@ -79,6 +83,14 @@ function InfoTab() {
       ? ((currentBalance - accountConfig.starting_balance) / accountConfig.starting_balance * 100).toFixed(2)
       : 0, [currentBalance, accountConfig])
 
+  const baseUsdLabel = symbolConfig
+    ? symbolConfig.quote_currency === 'USD'
+      ? '1.0000'
+      : symbolConfig.base_usd_rate !== undefined && symbolConfig.base_usd_rate !== ''
+        ? Number(symbolConfig.base_usd_rate).toFixed(4)
+        : 'required'
+    : '—'
+
   return (
     <>
       {symbolConfig && (
@@ -88,6 +100,9 @@ function InfoTab() {
           <Kv label="Pip Size"   value={symbolConfig.pip_size} />
           <Kv label="Spread"     value={`${accountConfig?.spread || 0} pips`} />
           <Kv label="Leverage"   value={`${accountConfig?.leverage || 0}:1`} />
+          {symbolConfig.quote_currency !== 'USD' && (
+            <Kv label="Base/USD" value={baseUsdLabel} />
+          )}
           <Divider />
         </>
       )}
@@ -95,6 +110,7 @@ function InfoTab() {
       {accountConfig && (
         <>
           <SectionHeader>Account</SectionHeader>
+          <Kv label="Acc Currency"    value='USD' />
           <Kv label="Starting"    value={`$${(accountConfig.starting_balance || 0).toLocaleString()}`} />
           <Kv label="Balance"     value={`$${currentBalance.toLocaleString()}`} color={currentBalance >= accountConfig.starting_balance ? C.green : C.red} />
           <Kv label="Return"      value={`${returnPercent}%`} color={returnPercent >= 0 ? C.green : C.red} />

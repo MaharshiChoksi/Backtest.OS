@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { createChart, CrosshairMode } from 'lightweight-charts'
-import { useTheme, useThemeStore }    from '../../store/useThemeStore'
-import { useSimStore }                from '../../store/useSimStore'
-import { buildLine }                  from '../../utils/indicators'
-import { msToSeconds }                from '../../utils/tradingUtils'
+import { useTheme, useThemeStore } from '../../store/useThemeStore'
+import { useSimStore } from '../../store/useSimStore'
+import { buildLine } from '../../utils/indicators'
+import { msToSeconds } from '../../utils/tradingUtils'
 
 /**
  * RSI sub-pane chart. Only mounted when indicator.rsi is enabled.
@@ -11,19 +11,20 @@ import { msToSeconds }                from '../../utils/tradingUtils'
  *
  * @param {{ rsiR, bars, times, rsiVals }} props
  */
-export function RsiPane({ rsiR, bars, times, rsiVals }) {
+export function RsiPane({ rsiR, bars, times, rsiVals, mainChartRef }) {
   const containerRef = useRef(null)
-  const C            = useTheme()
-  const dark         = useThemeStore((s) => s.dark)
-  const cursor       = useSimStore((s) => s.cursor)
+  const C = useTheme()
+  const dark = useThemeStore((s) => s.dark)
+  const cursor = useSimStore((s) => s.cursor)
 
   useEffect(() => {
     if (!containerRef.current || !bars.length) return
 
     const chart = createChart(containerRef.current, {
+      autoSize: true,
       layout: {
         background: { color: C.bg },
-        textColor:  C.muted,
+        textColor: C.muted,
         fontFamily: '"JetBrains Mono","SF Mono",monospace',
       },
       grid: {
@@ -32,49 +33,68 @@ export function RsiPane({ rsiR, bars, times, rsiVals }) {
       },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: C.border },
-      timeScale:       { borderColor: C.border, timeVisible: true, secondsVisible: false, visible: false },
-      leftPriceScale:  { visible: false },
+      timeScale: { borderColor: C.border, timeVisible: true, secondsVisible: false, visible: false },
+      leftPriceScale: { visible: false },
     })
 
     const rsiSeries = chart.addLineSeries({
-      color: C.purple, lineWidth: 1, lastValueVisible: false, priceLineVisible: false,
+      color: C.purple, lineWidth: 1, lastValueVisible: true, priceLineVisible: true,
     })
     const ob = chart.addLineSeries({
-      color: C.red + '60', lineWidth: 1, lastValueVisible: false, priceLineVisible: false, lineStyle: 2,
+      color: C.red + '60', lineWidth: 1, lastValueVisible: true, priceLineVisible: true, lineStyle: 2,
     })
     const os = chart.addLineSeries({
-      color: C.green + '60', lineWidth: 1, lastValueVisible: false, priceLineVisible: false, lineStyle: 2,
+      color: C.green + '60', lineWidth: 1, lastValueVisible: true, priceLineVisible: true, lineStyle: 2,
     })
 
-    rsiSeries.setData(buildLine(rsiVals, cursor, times))
-    ob.setData(bars.map((b) => ({ time: msToSeconds(b.time), value: 70 })))
-    os.setData(bars.map((b) => ({ time: msToSeconds(b.time), value: 30 })))
+    // Set initial data up to cursor only
+    if (rsiVals && rsiVals.length > 0) {
+      rsiSeries.setData(buildLine(rsiVals, cursor, times))
+    }
+    // ob/os lines also sliced to cursor
+    const slicedBars = bars.slice(0, cursor)
+    ob.setData(slicedBars.map((b) => ({ time: msToSeconds(b.time), value: 70 })))
+    os.setData(slicedBars.map((b) => ({ time: msToSeconds(b.time), value: 30 })))
 
-    rsiR.chart.current  = chart
+    // Fit content to show all data
+    chart.timeScale().fitContent()
+
+    // ✓ Store ONLY the rsiSeries (not the chart) in the ref so updates work
+    rsiR.chart.current = chart
+    // ── Sync time scales bidirectionally ──
+    const syncRsiFromMain = (range) => {
+      if (range) chart.timeScale().setVisibleLogicalRange(range)
+    }
+    const syncMainFromRsi = (range) => {
+      if (range) mainChartRef.current?.timeScale().setVisibleLogicalRange(range)
+    }
+
+    mainChartRef.current?.timeScale().subscribeVisibleLogicalRangeChange(syncRsiFromMain)
+    chart.timeScale().subscribeVisibleLogicalRangeChange(syncMainFromRsi)
+
     rsiR.series.current = rsiSeries
-
-    const ro = new ResizeObserver(() => {
-      if (containerRef.current)
-        chart.resize(containerRef.current.clientWidth, containerRef.current.clientHeight)
-    })
-    ro.observe(containerRef.current)
+    rsiR.ob.current = ob
+    rsiR.os.current = os
 
     return () => {
-      ro.disconnect()
+      mainChartRef.current?.timeScale().unsubscribeVisibleLogicalRangeChange(syncRsiFromMain)
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(syncMainFromRsi)
       chart.remove()
-      rsiR.chart.current  = null
+      rsiR.chart.current = null
       rsiR.series.current = null
+      rsiR.ob.current = null
+      rsiR.os.current = null
     }
-  }, [bars]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bars]) // ← Added rsiR to deps
 
   // Theme update
   useEffect(() => {
     if (!rsiR.chart.current) return
     rsiR.chart.current.applyOptions({
       layout: { background: { color: C.bg }, textColor: C.muted },
-      grid:   { vertLines: { color: C.border }, horzLines: { color: C.border } },
+      grid: { vertLines: { color: C.border }, horzLines: { color: C.border } },
     })
-  }, [dark]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dark, C.bg, C.muted, C.border, rsiR]) // ← Added C.* and rsiR to deps
 
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>

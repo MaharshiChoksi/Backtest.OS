@@ -145,7 +145,7 @@ function ClosedTradeRow({ trade: t }) {
         <span style={pill(reasonColor)}>{t.closeReason}</span>
       </div>
 
-      <div style={{ fontSize: 11, color: C.dim }}>
+      <div style={{ fontSize: 11, color: C.muted }}>
         {fmtDate(t.openTime)} → {fmtDate(t.closeTime)}
       </div>
 

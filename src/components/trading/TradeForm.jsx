@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useTheme }      from '../../store/useThemeStore'
 import { useSimStore }   from '../../store/useSimStore'
 import { useTradeStore } from '../../store/useTradeStore'
-import { getDecimalPlaces } from '../../utils/tradingUtils'
+import { getDecimalPlaces, validateMarginForTrade } from '../../utils/tradingUtils'
 import { FONT }          from '../../constants'
 import { fmt } from '../../utils/format'
 import { mkInp, mkLabel, SectionHeader } from '../ui/atoms'
@@ -14,6 +14,7 @@ export function TradeForm() {
   const symbolConfig = useSimStore((s) => s.symbolConfig)
   const accountConfig = useSimStore((s) => s.accountConfig)
   const openTrade  = useTradeStore((s) => s.openTrade)
+  const trades     = useTradeStore((s) => s.trades)
 
   const currentBar = bars[cursor - 1]
   
@@ -45,8 +46,32 @@ export function TradeForm() {
       : currentBar.close - spreadInPrice
   ) : null
 
+  // Get open trades (exclude closed trades)
+  const openTrades = useMemo(() => 
+    trades.filter(t => t.status === 'open'),
+    [trades]
+  )
+
+  // Validate margin for the proposed trade
+  const marginValidation = useMemo(() => {
+    const tradeSize = parseFloat(size) || 0
+    
+    return validateMarginForTrade({
+      accountBalance: accountConfig?.starting_balance || 0,
+      openTrades: openTrades,
+      positions: {
+        lotSize: tradeSize,
+        entryPrice: entryPrice || currentBar?.close || 0,
+      },
+      leverage: accountConfig?.leverage || 100,
+      symbolConfig: symbolConfig,
+    })
+  }, [size, entryPrice, currentBar, accountConfig, openTrades, symbolConfig])
+
+  const canOpenTrade = currentBar && entryPrice && marginValidation.valid
+
   const handleOpen = () => {
-    if (!currentBar || !entryPrice) return
+    if (!canOpenTrade) return
     const tradeSize = parseFloat(size) || 0.1
     const fees = tradeSize * (accountConfig?.commission || 0) * 2 // entry + exit commissions
     openTrade({
@@ -140,25 +165,71 @@ export function TradeForm() {
         </div>
       )}
 
+      {/* Margin Information Display */}
+      {currentBar && marginValidation && (
+        <div style={{
+          marginBottom: 12,
+          padding: 10,
+          background: marginValidation.valid ? C.green + '11' : C.red + '11',
+          border: `1px solid ${marginValidation.valid ? C.green + '33' : C.red + '33'}`,
+          borderRadius: 4,
+          fontSize: 11,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: C.text }}>
+            <span style={{ fontWeight: 600 }}>Margin Check:</span>
+            <span style={{ color: marginValidation.valid ? C.green : C.red, fontWeight: 600 }}>
+              {marginValidation.valid ? '✓ OK' : '✗ INSUFFICIENT'}
+            </span>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6, fontSize: 10, color: C.muted }}>
+            <div>
+              <div>Account Balance:</div>
+              <div style={{ color: C.text, fontWeight: 600 }}>${marginValidation.accountBalance.toLocaleString()}</div>
+            </div>
+            <div>
+              <div>Used Margin:</div>
+              <div style={{ color: C.text, fontWeight: 600 }}>${marginValidation.usedMargin.toLocaleString()}</div>
+            </div>
+            <div>
+              <div>Required Margin:</div>
+              <div style={{ color: accent, fontWeight: 600 }}>${marginValidation.requiredMargin.toLocaleString()}</div>
+            </div>
+            <div>
+              <div>Available Margin:</div>
+              <div style={{ color: marginValidation.valid ? C.green : C.red, fontWeight: 600 }}>
+                ${marginValidation.availableMargin.toLocaleString()}
+              </div>
+            </div>
+          </div>
+          
+          <div style={{ fontSize: 10, color: C.muted, fontStyle: 'italic' }}>
+            {marginValidation.message}
+          </div>
+        </div>
+      )}
+
       <button
         onClick={handleOpen}
-        disabled={!currentBar}
+        disabled={!canOpenTrade}
         style={{
           width:        '100%',
           padding:      '9px 0',
           borderRadius: 5,
-          cursor:       currentBar ? 'pointer' : 'not-allowed',
+          cursor:       canOpenTrade ? 'pointer' : 'not-allowed',
           fontSize:     13,
           fontFamily:   FONT,
           fontWeight:   700,
           letterSpacing:'0.5px',
           transition:   'all .15s',
-          background:   accent + '22',
-          border:       `1px solid ${accent}`,
-          color:        accent,
-          opacity:      currentBar ? 1 : 0.35,
+          background:   canOpenTrade ? (accent + '22') : (C.red + '11'),
+          border:       `1px solid ${canOpenTrade ? accent : C.red}`,
+          color:        canOpenTrade ? accent : C.red,
+          opacity:      canOpenTrade ? 1 : 0.5,
         }}
+        title={!marginValidation.valid ? marginValidation.message : ''}
       >
+        {!canOpenTrade && marginValidation && !marginValidation.valid && '⚠ '}
         {isBuy ? '▲ OPEN LONG' : '▼ OPEN SHORT'}
       </button>
     </div>

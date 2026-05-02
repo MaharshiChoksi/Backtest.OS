@@ -1,10 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { useSimStore }       from '../store/useSimStore'
-import { useTradeStore }     from '../store/useTradeStore'
+import { useSimStore } from '../store/useSimStore'
+import { useTradeStore } from '../store/useTradeStore'
 import { useIndicatorStore } from '../store/useIndicatorStore'
 import { BASE_MS, getTimeframeMs } from '../constants'
-import { buildLine }         from '../utils/indicators'
-import { msToSeconds }       from '../utils/tradingUtils'
+import { buildLine } from '../utils/indicators'
+import { msToSeconds } from '../utils/tradingUtils'
 
 const G33 = '#36d47c33'
 const R33 = '#f0505033'
@@ -21,12 +21,12 @@ const R33 = '#f0505033'
 export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, rsiR }) {
   // For backwards compatibility with single-timeframe mode, build chartR
   const chartR = isMultiTimeframe ? simChartData[primaryTF]?.refs : { candle: { current: null }, vol: { current: null }, ema20: { current: null }, ema50: { current: null }, bbMid: { current: null }, bbUp: { current: null }, bbLow: { current: null } }
-  
+
   // ── Ref mirrors for all hot-loop state ────────────────────
-  const cursorRef   = useRef(useSimStore.getState().cursor)
-  const playingRef  = useRef(false)
-  const speedRef    = useRef(1)
-  const indicRef    = useRef(useIndicatorStore.getState())
+  const cursorRef = useRef(useSimStore.getState().cursor)
+  const playingRef = useRef(false)
+  const speedRef = useRef(1)
+  const indicRef = useRef(useIndicatorStore.getState())
   const symbolConfigRef = useRef(useSimStore.getState().symbolConfig)
   const accountConfigRef = useRef(useSimStore.getState().accountConfig)
   const selectedTimeframesRef = useRef(useSimStore.getState().selectedTimeframes)
@@ -41,9 +41,9 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
   // ── Keep all refs in sync with their stores ───────────────
   useEffect(() => {
     const s = useSimStore.getState()
-    cursorRef.current  = s.cursor
+    cursorRef.current = s.cursor
     playingRef.current = s.playing
-    speedRef.current   = s.speed
+    speedRef.current = s.speed
     symbolConfigRef.current = s.symbolConfig
     accountConfigRef.current = s.accountConfig
     selectedTimeframesRef.current = s.selectedTimeframes
@@ -51,7 +51,7 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
     const unsub = useSimStore.subscribe((s) => {
       if (!playingRef.current) cursorRef.current = s.cursor
       playingRef.current = s.playing
-      speedRef.current   = s.speed
+      speedRef.current = s.speed
       symbolConfigRef.current = s.symbolConfig
       accountConfigRef.current = s.accountConfig
       selectedTimeframesRef.current = s.selectedTimeframes
@@ -106,27 +106,27 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
   // ── Update a single chart with bar data ──
   const updateSingleChart = useCallback((refs, barData, idx, ic, data) => {
     if (!refs || !refs.candle?.current) return
-    
+
     // Candlestick
     refs.candle.current?.update(barData)
-    
+
     // Volume
     refs.vol.current?.update({
       time: barData.time,
       value: barData.volume,
       color: barData.close >= barData.open ? G33 : R33,
     })
-    
+
     // EMA20
     if (ic.ema20 && data.ema20 && data.ema20[idx] !== null) {
       refs.ema20.current?.update({ time: barData.time, value: data.ema20[idx] })
     }
-    
+
     // EMA50
     if (ic.ema50 && data.ema50 && data.ema50[idx] !== null) {
       refs.ema50.current?.update({ time: barData.time, value: data.ema50[idx] })
     }
-    
+
     // Bollinger Bands
     if (ic.bb && data.bb && data.bb.upper[idx] !== null) {
       refs.bbMid.current?.update({ time: barData.time, value: data.bb.mid[idx] })
@@ -139,47 +139,49 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
   const updateChartForBar = useCallback(
     (bar, idx) => {
       const ic = indicRef.current
-      
+
       // Convert time to seconds for TradingView
       const barForChart = { ...bar, time: msToSeconds(bar.time) }
-      
+
       // Update primary chart (or single chart)
-      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema20: ema20v, ema50: ema50v, bb: bbData }
+      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema20: ema20v, ema50: ema50v, bb: bbData, rsi: rsiVals }
       const primaryRefs = isMultiTimeframe ? simChartData[primaryTF]?.refs : chartR
-      
+
       updateSingleChart(primaryRefs, barForChart, idx, ic, primaryData)
-      
+
       // Update RSI (only in single timeframe mode)
-      if (!isMultiTimeframe && ic.rsi && rsiVals[idx] !== null) {
+      if (ic.rsi && rsiVals[idx] !== null) {
         rsiR.series.current?.update({ time: barForChart.time, value: rsiVals[idx] })
+        rsiR.ob.current?.update({ time: barForChart.time, value: 70 })
+        rsiR.os.current?.update({ time: barForChart.time, value: 30 })
       }
-      
+
       // ── Update other timeframes in multi-timeframe mode ──
       if (isMultiTimeframe && simChartData) {
         const currentTime = bar.time
-        
+
         Object.keys(simChartData).forEach((tf) => {
           if (tf === primaryTF) return  // Already updated above
-          
+
           const tfData = simChartData[tf]?.data
           const tfRefs = simChartData[tf]?.refs
           if (!tfData || !tfRefs || !tfRefs.candle?.current) return
-          
+
           // Get timeframe in milliseconds for future data prevention
           const tfMs = getTimeframeMs(tf)
-          
+
           // Find the latest COMPLETED bar that doesn't exceed current time
           const tfBarIdx = findCompletedBarIndex(tfData.bars, currentTime, tfMs)
-          
+
           // If no completed bar yet, or bar hasn't changed, skip update
           if (tfBarIdx < 0) return
-          
+
           const tfBar = tfData.bars[tfBarIdx]
           if (!tfBar) return
-          
+
           // Convert time to seconds for TradingView
           const tfBarForChart = { ...tfBar, time: msToSeconds(tfBar.time) }
-          
+
           // Update the other timeframe's chart
           updateSingleChart(tfRefs, tfBarForChart, tfBarIdx, ic, tfData)
         })
@@ -213,24 +215,24 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
       cursorRef.current = target
       useSimStore.getState().setCursor(target)
 
-      const ic    = indicRef.current
+      const ic = indicRef.current
       const slice = bars.slice(0, target)
-      
+
       // Get target time for syncing other timeframes
       const targetTime = bars[target - 1]?.time
-      
+
       // Convert times to seconds for TradingView
       const candleData = slice.map(b => ({ ...b, time: msToSeconds(b.time) }))
       const volData = slice.map((b) => ({
-        time:  msToSeconds(b.time),
+        time: msToSeconds(b.time),
         value: b.volume,
         color: b.close >= b.open ? G33 : R33,
       }))
 
       // Update primary chart (or single chart)
-      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema20: ema20v, ema50: ema50v, bb: bbData, times }
+      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema20: ema20v, ema50: ema50v, bb: bbData, rsi: rsiVals, times }
       const primaryRefs = isMultiTimeframe ? simChartData[primaryTF]?.refs : chartR
-      
+
       primaryRefs.candle.current?.setData(candleData)
       primaryRefs.vol.current?.setData(volData)
       primaryRefs.ema20.current?.setData(ic.ema20 ? buildLine(primaryData.ema20, target, primaryData.times) : [])
@@ -244,23 +246,30 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
         primaryRefs.bbUp.current?.setData([])
         primaryRefs.bbLow.current?.setData([])
       }
-      
-      if (!isMultiTimeframe) {
-        rsiR.series.current?.setData(ic.rsi ? buildLine(rsiVals, target, times) : [])
+
+      if (ic.rsi) {
+        rsiR.series.current?.setData(buildLine(rsiVals, target, times))
+        const slicedBars = bars.slice(0, target)
+        rsiR.ob.current?.setData(slicedBars.map(b => ({ time: msToSeconds(b.time), value: 70 })))
+        rsiR.os.current?.setData(slicedBars.map(b => ({ time: msToSeconds(b.time), value: 30 })))
+      } else {
+        rsiR.series.current?.setData([])
+        rsiR.ob.current?.setData([])
+        rsiR.os.current?.setData([])
       }
-      
+
       // ── Update other timeframes in multi-timeframe mode ──
       if (isMultiTimeframe && simChartData && targetTime) {
         Object.keys(simChartData).forEach((tf) => {
           if (tf === primaryTF) return
-          
+
           const tfData = simChartData[tf]?.data
           const tfRefs = simChartData[tf]?.refs
           if (!tfData || !tfRefs || !tfRefs.candle?.current) return
-          
+
           // Get timeframe in ms for future data prevention
           const tfMs = getTimeframeMs(tf)
-          
+
           // Find the latest COMPLETED bar
           const tfTarget = findCompletedBarIndex(tfData.bars, targetTime, tfMs)
           if (tfTarget < 0) {
@@ -274,17 +283,17 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
             tfRefs.bbLow.current?.setData([])
             return
           }
-          
+
           const tfSlice = tfData.bars.slice(0, tfTarget + 1)
-          
+
           // Convert times to seconds for TradingView
           const tfCandleData = tfSlice.map(b => ({ ...b, time: msToSeconds(b.time) }))
           const tfVolData = tfSlice.map((b) => ({
-            time:  msToSeconds(b.time),
+            time: msToSeconds(b.time),
             value: b.volume,
             color: b.close >= b.open ? G33 : R33,
           }))
-          
+
           // Update this timeframe's chart
           tfRefs.candle.current?.setData(tfCandleData)
           tfRefs.vol.current?.setData(tfVolData)
@@ -309,8 +318,8 @@ export function useSimEngine({ bars, times, ema20v, ema50v, bbData, rsiVals, isM
   useEffect(() => {
     if (!bars.length) return
 
-    let tickId  = null
-    let syncId  = null
+    let tickId = null
+    let syncId = null
     let genId = 0
     let shouldTick = false
 

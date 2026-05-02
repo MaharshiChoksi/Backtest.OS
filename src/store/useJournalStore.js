@@ -45,6 +45,7 @@ export const useJournalStore = create((set, get) => ({
         balance: balance,
         deposits: accountConfig?.deposits || 0,
         withdrawals: accountConfig?.withdrawals || 0,
+        timestamp: trade.openTime,
         entryDate: fmtDate(trade.openTime).split(' ')[0],
         entryTime: fmtDate(trade.openTime).split(' ')[1],
         pair: symbolConfig?.symbol || 'N/A',
@@ -61,6 +62,7 @@ export const useJournalStore = create((set, get) => ({
         risk,
         fees: (accountConfig?.commission || 0) * trade.size * 2,
         exitPrice: null,
+        exitTimestamp: null,
         exitDate: null,
         exitTime: null,
         pnlUsd: 0,
@@ -123,6 +125,7 @@ export const useJournalStore = create((set, get) => ({
         return {
           ...e,
           exitPrice: trade.closePrice,
+          exitTimestamp: trade.closeTime,
           exitDate: fmtDate(trade.closeTime).split(' ')[0],
           exitTime: fmtDate(trade.closeTime).split(' ')[1],
           pnlUsd: trade.pnl || 0,  // Trade PnL already has commission deducted, fees column is just for reference
@@ -258,9 +261,14 @@ export const useJournalStore = create((set, get) => ({
       ...rows.map(r => r.join('\t'))
     ].join('\n')
 
+    // Get start and end dates for filename after sorting data from oldest(start) to latest(end)
+    const sortedEntries = [...entries].sort((a, b) => new Date(a.entryDate + ' ' + a.entryTime) - new Date(b.entryDate + ' ' + b.entryTime))
+    const startdate = sortedEntries[0] ? sortedEntries[0].entryDate : 'start'
+    const enddate = sortedEntries[sortedEntries.length - 1] ? sortedEntries[sortedEntries.length - 1].entryDate : 'end'
+
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8;' }))
-    a.download = `backtestos_journal_${new Date().toISOString().slice(0, 10)}.tsv`
+    a.download = `backtestos_journal_${startdate}_to_${enddate}.tsv`
     a.click()
     URL.revokeObjectURL(a.href)
   },

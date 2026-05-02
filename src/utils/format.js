@@ -13,9 +13,17 @@ export const fmtDate = (ts) => {
 }
 
 export const fmtShortDate = (ts) => {
+  // Guard against invalid inputs
+  if (!ts || typeof ts !== 'number' || isNaN(ts)) return 'Invalid Date'
+  
   // ts can be seconds or milliseconds - detect and handle both
   const ms = ts > 1e12 ? ts : ts * 1000
-  return new Date(ms).toISOString().slice(0, 10)
+  const date = new Date(ms)
+  
+  // Check if date is valid
+  if (isNaN(date.getTime())) return 'Invalid Date'
+  
+  return date.toISOString().slice(0, 10)
 }
 
 export const generateSampleBars = (n = 2000) => {
