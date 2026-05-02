@@ -503,6 +503,8 @@ export function UploadScreen() {
       setStatus('📊 Filtering data by date range...')
       const startTimestamp = new Date(startDate).getTime()
       const endTimestamp = new Date(endDate).getTime() + 86400000
+      useSimStore.getState().setBacktestDateRange(startDate, endDate)  // add this line
+
 
       const filteredBars = bars.current.filter(
         (b) => b.time >= startTimestamp && b.time <= endTimestamp

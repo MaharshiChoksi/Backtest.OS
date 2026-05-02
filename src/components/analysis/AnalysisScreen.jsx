@@ -1,4 +1,5 @@
 import { useSimStore } from '../../store/useSimStore'
+import { useTradeStore } from '../../store/useTradeStore'
 import { useThemeStore } from '../../store/useThemeStore'
 import { AnalysisSidebar } from './AnalysisSidebar'
 import { MetricsTab } from '../metrics/MetricsTab'
@@ -9,7 +10,7 @@ export function AnalysisScreen({ onExit }) {
   const exitAnalysisMode = useSimStore((s) => s.exitAnalysisMode)
   const accountConfig = useSimStore((s) => s.accountConfig)
   const symbolConfig = useSimStore((s) => s.symbolConfig)
-  const trades = useSimStore((s) => s.trades)
+  const trades = useTradeStore((s) => s.trades)
 
   const closedTrades = trades.filter(t => t.status === 'closed')
   const openTrades = trades.filter(t => t.status === 'open')
@@ -27,7 +28,7 @@ export function AnalysisScreen({ onExit }) {
       fontFamily: '"JetBrains Mono", "SF Mono", monospace',
     }}>
       {/* Left Sidebar */}
-      <AnalysisSidebar />
+      {/* <AnalysisSidebar /> */}
 
       {/* Main Content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -96,7 +97,7 @@ export function AnalysisScreen({ onExit }) {
             <SummaryCard 
               label="Win Rate" 
               value={closedTrades.length > 0 
-                ? `${Math.round(closedTrades.filter(t => t.pnl > 0).length / closedTrades.length * 100)}%`
+                ? `${(closedTrades.filter(t => t.pnl > 0).length / closedTrades.length * 100).toFixed(2)}%`
                 : '0%'
               } 
               icon="🎯"

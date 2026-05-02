@@ -3,6 +3,23 @@
  * Calculates trading performance metrics from trades data
  */
 
+const normalizeTimestamp = (value) => {
+  if (typeof value === 'number') {
+    return value > 1e12 ? value : value * 1000
+  }
+  if (typeof value === 'string') {
+    const parsed = new Date(value).getTime()
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+const isLongSide = (side) => {
+  if (!side) return false
+  const normalized = String(side).trim().toLowerCase()
+  return ['buy', 'long', 'b', 'l'].includes(normalized)
+}
+
 /**
  * Calculate all metrics for a set of trades
  * @param {Array} trades - Array of trade objects
@@ -17,10 +34,16 @@ export function calculateMetrics(trades, accountConfig, startDate = null, endDat
   let filteredTrades = trades.filter(t => t.status === 'closed')
   
   if (startDate) {
-    filteredTrades = filteredTrades.filter(t => new Date(t.openTime) >= startDate)
+    filteredTrades = filteredTrades.filter(t => {
+      const openMs = normalizeTimestamp(t.openTime)
+      return openMs !== null && new Date(openMs) >= startDate
+    })
   }
   if (endDate) {
-    filteredTrades = filteredTrades.filter(t => new Date(t.openTime) <= endDate)
+    filteredTrades = filteredTrades.filter(t => {
+      const openMs = normalizeTimestamp(t.openTime)
+      return openMs !== null && new Date(openMs) <= endDate
+    })
   }
   if (pairFilter) {
     filteredTrades = filteredTrades.filter(t => t.pair === pairFilter)
@@ -155,19 +178,22 @@ export function calculateMetrics(trades, accountConfig, startDate = null, endDat
   // Daily P&L
   const dailyPnl = {}
   filteredTrades.forEach(trade => {
-    const date = new Date(trade.openTime).toDateString()
-    if (!dailyPnl[date]) {
-      dailyPnl[date] = 0
+    const tradeDate = new Date(trade.openTime)
+    const dateKey = tradeDate.toDateString()
+    const dateTimestamp = new Date(tradeDate.getFullYear(), tradeDate.getMonth(), tradeDate.getDate()).getTime()
+    if (!dailyPnl[dateKey]) {
+      dailyPnl[dateKey] = { amount: 0, timestamp: dateTimestamp }
     }
-    dailyPnl[date] += (trade.pnl || 0)
+    dailyPnl[dateKey].amount += (trade.pnl || 0)
   })
 
-  Object.entries(dailyPnl).forEach(([date, amount]) => {
+  Object.entries(dailyPnl).forEach(([dateKey, data]) => {
+    const { amount, timestamp } = data
     if (amount > metrics.largestWinningDay.amount) {
-      metrics.largestWinningDay = { date, amount }
+      metrics.largestWinningDay = { date: timestamp, amount }
     }
     if (amount < metrics.largestLosingDay.amount) {
-      metrics.largestLosingDay = { date, amount }
+      metrics.largestLosingDay = { date: timestamp, amount }
     }
   })
 
@@ -200,36 +226,88 @@ export function calculateMetrics(trades, accountConfig, startDate = null, endDat
   // Average Trade Duration
   if (filteredTrades.length > 0) {
     const totalDuration = filteredTrades.reduce((sum, t) => {
-      const duration = (new Date(t.closeTime) - new Date(t.openTime)) / 1000 // seconds
+      const openMs = normalizeTimestamp(t.openTime)
+      const closeMs = normalizeTimestamp(t.closeTime)
+      const duration = (closeMs && openMs) ? (closeMs - openMs) / 1000 : 0
       return sum + duration
     }, 0)
     metrics.avgTradeDuration = formatDuration(totalDuration / filteredTrades.length)
   }
 
   // Balance Curve
-  let balance = accountConfig?.starting_balance || 0
-  metrics.balanceCurve.push({ time: filteredTrades[0]?.openTime || Date.now(), balance })
+  const balanceCurveTrades = [...filteredTrades].sort((a, b) => {
+    const aTime = normalizeTimestamp(a.closeTime) || normalizeTimestamp(a.openTime) || 0
+    const bTime = normalizeTimestamp(b.closeTime) || normalizeTimestamp(b.openTime) || 0
+    return aTime - bTime
+  })
 
-  filteredTrades.forEach(trade => {
+  let balance = accountConfig?.starting_balance || 0
+  const firstOpen = normalizeTimestamp(balanceCurveTrades[0]?.openTime)
+  const startTime = firstOpen || Date.now()
+  metrics.balanceCurve.push({ time: startTime, balance })
+
+  balanceCurveTrades.forEach(trade => {
     balance += (trade.pnl || 0)
-    metrics.balanceCurve.push({ time: trade.closeTime, balance })
+    const openMs = normalizeTimestamp(trade.openTime)
+    const closeMs = normalizeTimestamp(trade.closeTime)
+    const tradeTime = closeMs || openMs
+    if (tradeTime) {
+      metrics.balanceCurve.push({ time: tradeTime, balance })
+    }
   })
 
   // Pairs Distribution
   filteredTrades.forEach(trade => {
     const pair = trade.pair || 'Unknown'
+    const normalizedSide = isLongSide(trade.side) ? 'long' : 'short'
     if (!metrics.pairsDistribution[pair]) {
-      metrics.pairsDistribution[pair] = { count: 0, pnl: 0, wins: 0 }
+      metrics.pairsDistribution[pair] = {
+        count: 0,
+        pnl: 0,
+        wins: 0,
+        losses: 0,
+        longs: 0,
+        longWins: 0,
+        longLosses: 0,
+        longPnl: 0,
+        shorts: 0,
+        shortWins: 0,
+        shortLosses: 0,
+        shortPnl: 0,
+      }
     }
-    metrics.pairsDistribution[pair].count++
-    metrics.pairsDistribution[pair].pnl += (trade.pnl || 0)
-    if (trade.pnl > 0) metrics.pairsDistribution[pair].wins++
+    const pairMetrics = metrics.pairsDistribution[pair]
+    pairMetrics.count++
+    pairMetrics.pnl += (trade.pnl || 0)
+    if (trade.pnl > 0) {
+      pairMetrics.wins++
+    } else {
+      pairMetrics.losses++
+    }
+
+    if (normalizedSide === 'long') {
+      pairMetrics.longs++
+      pairMetrics.longPnl += (trade.pnl || 0)
+      if (trade.pnl > 0) {
+        pairMetrics.longWins++
+      } else {
+        pairMetrics.longLosses++
+      }
+    } else {
+      pairMetrics.shorts++
+      pairMetrics.shortPnl += (trade.pnl || 0)
+      if (trade.pnl > 0) {
+        pairMetrics.shortWins++
+      } else {
+        pairMetrics.shortLosses++
+      }
+    }
   })
 
   // Strategy Breakdown
   filteredTrades.forEach(trade => {
-    // By day of week
-    const dayOfWeek = new Date(trade.openTime).getDay()
+    const tradeDate = new Date(trade.openTime)
+    const dayOfWeek = tradeDate.getDay()
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
     const dayName = dayNames[dayOfWeek]
     if (!metrics.strategyBreakdown.byDayOfWeek[dayName]) {
@@ -240,7 +318,7 @@ export function calculateMetrics(trades, accountConfig, startDate = null, endDat
     if (trade.pnl > 0) metrics.strategyBreakdown.byDayOfWeek[dayName].wins++
 
     // By hour
-    const hour = new Date(trade.openTime).getHours()
+    const hour = tradeDate.getHours()
     if (!metrics.strategyBreakdown.byHour[hour]) {
       metrics.strategyBreakdown.byHour[hour] = { count: 0, pnl: 0, wins: 0 }
     }
@@ -249,9 +327,16 @@ export function calculateMetrics(trades, accountConfig, startDate = null, endDat
     if (trade.pnl > 0) metrics.strategyBreakdown.byHour[hour].wins++
 
     // By side
-    const side = trade.side === 'buy' || trade.side === 'long' ? 'long' : 'short'
-    metrics.strategyBreakdown.bySide[side].total++
-    if (trade.pnl > 0) metrics.strategyBreakdown.bySide[side].wins
+    const normalizedSide = ['buy', 'long'].includes(String(trade.side).toLowerCase()) ? 'long' : 'short'
+    if (!metrics.strategyBreakdown.bySide[normalizedSide]) {
+      metrics.strategyBreakdown.bySide[normalizedSide] = { wins: 0, losses: 0, total: 0 }
+    }
+    metrics.strategyBreakdown.bySide[normalizedSide].total++
+    if (trade.pnl > 0) {
+      metrics.strategyBreakdown.bySide[normalizedSide].wins++
+    } else {
+      metrics.strategyBreakdown.bySide[normalizedSide].losses++
+    }
   })
 
   return metrics

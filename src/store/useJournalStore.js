@@ -45,6 +45,7 @@ export const useJournalStore = create((set, get) => ({
         balance: balance,
         deposits: accountConfig?.deposits || 0,
         withdrawals: accountConfig?.withdrawals || 0,
+        timestamp: trade.openTime,
         entryDate: fmtDate(trade.openTime).split(' ')[0],
         entryTime: fmtDate(trade.openTime).split(' ')[1],
         pair: symbolConfig?.symbol || 'N/A',
@@ -61,6 +62,7 @@ export const useJournalStore = create((set, get) => ({
         risk,
         fees: (accountConfig?.commission || 0) * trade.size * 2,
         exitPrice: null,
+        exitTimestamp: null,
         exitDate: null,
         exitTime: null,
         pnlUsd: 0,
@@ -123,6 +125,7 @@ export const useJournalStore = create((set, get) => ({
         return {
           ...e,
           exitPrice: trade.closePrice,
+          exitTimestamp: trade.closeTime,
           exitDate: fmtDate(trade.closeTime).split(' ')[0],
           exitTime: fmtDate(trade.closeTime).split(' ')[1],
           pnlUsd: trade.pnl || 0,  // Trade PnL already has commission deducted, fees column is just for reference

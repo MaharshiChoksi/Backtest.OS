@@ -6,7 +6,7 @@ import { useTheme } from '../../store/useThemeStore'
  * Displays metrics in a radar/spider chart format
  * Metrics: Win Rate, RR Ratio, Risk %, Profit Factor, Sharpe Ratio, Avg Trade Duration (normalized)
  */
-export function RadarChart({ metrics, width = 400, height = 400 }) {
+export function RadarChart({ metrics, width = 450, height = 450 }) {
   const C = useTheme()
 
   // Data points for radar chart
@@ -53,9 +53,11 @@ export function RadarChart({ metrics, width = 400, height = 400 }) {
   }, [metrics])
 
   const numPoints = dataPoints.length
-  const centerX = width / 2
-  const centerY = height / 2
-  const radius = Math.min(width, height) / 2 - 50
+  const size = Math.max(width, height, 520)
+  const padding = 70
+  const centerX = size / 2
+  const centerY = size / 2
+  const radius = Math.max(0, Math.min(width, height) / 2 - padding)
 
   // Generate points on the circle
   const angleSlice = (Math.PI * 2) / numPoints
@@ -87,8 +89,21 @@ export function RadarChart({ metrics, width = 400, height = 400 }) {
     .join(' ') + ' Z'
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
-      <svg width={width} height={height} style={{ background: C.surf, borderRadius: 6, border: `1px solid ${C.border}` }}>
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 16, width: '100%' }}>
+      <svg
+        viewBox={`0 0 ${size} ${size}`}
+        preserveAspectRatio='xMidYMid meet'
+        style={{
+          width: '100%',
+          maxWidth: `${size}px`,
+          height: 'auto',
+          background: C.surf,
+          borderRadius: 6,
+          border: `1px solid ${C.border}`,
+          overflow: 'visible',
+          display: 'block',
+        }}
+      >
         {/* Grid circles */}
         {gridCircles.map((level, idx) => (
           <circle
@@ -97,7 +112,7 @@ export function RadarChart({ metrics, width = 400, height = 400 }) {
             cy={centerY}
             r={level * radius}
             fill="none"
-            stroke={C.border}
+            stroke={C.border2}
             strokeWidth="1"
             strokeDasharray="2,2"
             opacity="0.5"
