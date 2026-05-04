@@ -296,6 +296,7 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
 // ── Table Row Component ────────────────────────────────────────
 function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTrade, removeEntry, C, currentBar, symbolConfig, accountConfig }) {
   const [editing, setEditing] = useState({})
+  const [draftValues, setDraftValues] = useState({})
 
   // Calculate real-time PnL for open positions
   const runtimePnL = useMemo(() => {
@@ -324,20 +325,26 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
     }
   }, [entry, currentBar, symbolConfig, accountConfig])
 
-  const handleChange = (key, value) => {
+  const commitChange = (key, value) => {
     // Convert numeric fields to numbers
     let finalValue = value
     if (key === 'risk' || key === 'fees' || key === 'lotSize') {
-      finalValue = parseFloat(value) || 0
+      const parsed = parseFloat(value)
+      finalValue = Number.isFinite(parsed) ? parsed : 0
     } else if (key === 'stopLoss' || key === 'takeProfit') {
-      finalValue = parseFloat(value) || null
+      if (value === '' || value === null || value === undefined) {
+        finalValue = null
+      } else {
+        const parsed = parseFloat(value)
+        finalValue = Number.isFinite(parsed) ? parsed : null
+      }
     }
 
     updateEntry(entry.tradeId, key, finalValue)
 
     // Also update trade details for SL/TP
     if (key === 'stopLoss' || key === 'takeProfit') {
-      const numValue = parseFloat(value) || null
+      const numValue = finalValue
       updateTradeDetails(entry.tradeId, {
         sl: key === 'stopLoss' ? numValue : entry.stopLoss,
         tp: key === 'takeProfit' ? numValue : entry.takeProfit,
@@ -372,13 +379,19 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
               color: C.text,
               backgroundColor: editing[col.key] ? C.border + '20' : 'transparent',
             }}
-            onDoubleClick={() => col.editable && !editing[col.key] && setEditing({ ...editing, [col.key]: true })}
+            onDoubleClick={() => {
+              if (!col.editable || editing[col.key]) return
+              if (col.type !== 'dropdown') {
+                setDraftValues((prev) => ({ ...prev, [col.key]: String(value ?? '') }))
+              }
+              setEditing({ ...editing, [col.key]: true })
+            }}
           >
             {col.type === 'dropdown' && editing[col.key] ? (
               <select
                 value={value}
                 onChange={(e) => {
-                  handleChange(col.key, e.target.value)
+                  commitChange(col.key, e.target.value)
                   setEditing({ ...editing, [col.key]: false })
                 }}
                 onBlur={() => setEditing({ ...editing, [col.key]: false })}
@@ -402,12 +415,23 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
               <input
                 type={col.key.includes('Price') || col.key === 'risk' || col.key === 'fees' ? 'number' : 'text'}
                 step={col.key.includes('Price') ? '0.00001' : col.key === 'risk' || col.key === 'fees' ? '0.01' : '0.01'}
-                value={value}
-                onChange={(e) => handleChange(col.key, e.target.value)}
-                onBlur={() => setEditing({ ...editing, [col.key]: false })}
+                value={draftValues[col.key] ?? String(value ?? '')}
+                onChange={(e) => setDraftValues((prev) => ({ ...prev, [col.key]: e.target.value }))}
+                onBlur={() => {
+                  commitChange(col.key, draftValues[col.key] ?? value)
+                  setEditing({ ...editing, [col.key]: false })
+                  setDraftValues((prev) => ({ ...prev, [col.key]: undefined }))
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') setEditing({ ...editing, [col.key]: false })
-                  if (e.key === 'Escape') setEditing({ ...editing, [col.key]: false })
+                  if (e.key === 'Enter') {
+                    commitChange(col.key, draftValues[col.key] ?? value)
+                    setEditing({ ...editing, [col.key]: false })
+                    setDraftValues((prev) => ({ ...prev, [col.key]: undefined }))
+                  }
+                  if (e.key === 'Escape') {
+                    setEditing({ ...editing, [col.key]: false })
+                    setDraftValues((prev) => ({ ...prev, [col.key]: undefined }))
+                  }
                 }}
                 autoFocus
                 style={{

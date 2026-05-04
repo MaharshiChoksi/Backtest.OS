@@ -18,6 +18,20 @@ export const useJournalStore = create((set, get) => ({
   entries: load(),
 
   /**
+   * Import journal entries from file and persist.
+   * By default replaces existing entries to avoid mixed datasets.
+   */
+  importEntries: (entries, options = {}) => {
+    const { replace = true } = options
+    set((s) => {
+      const next = replace ? entries : [...s.entries, ...entries]
+      const sorted = [...next].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+      persist(sorted)
+      return { entries: sorted }
+    })
+  },
+
+  /**
    * Auto-sync an open trade to journal
    */
   syncOpenTrade: (trade, symbolConfig, accountConfig) => {

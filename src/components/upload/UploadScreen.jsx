@@ -64,7 +64,7 @@ export const TIMEZONE_OPTIONS = [
   { label: 'GMT-12 (Baker Island)', value: -12 },
 ]
 
-export function UploadScreen() {
+export function UploadScreen({ onOpenJournal }) {
   const C = useTheme()
   const loadSession = useSimStore((s) => s.loadSession)
   const setSymbolConfig = useSimStore((s) => s.setSymbolConfig)
@@ -643,6 +643,25 @@ export function UploadScreen() {
           SIMULATION ENGINE · MARKET REPLAY
         </div>
         <div style={{ width: 40, height: 1, background: C.amber + '50', margin: '18px auto 0' }} />
+        <div style={{ marginTop: 16 }}>
+          <button
+            onClick={onOpenJournal}
+            style={{
+              background: 'transparent',
+              border: `1px solid ${C.border2}`,
+              color: C.text,
+              borderRadius: 6,
+              padding: '8px 14px',
+              cursor: 'pointer',
+              fontSize: 11,
+              fontFamily: '"JetBrains Mono", "SF Mono", monospace',
+              fontWeight: 600,
+              letterSpacing: '0.5px',
+            }}
+          >
+            Open Journal & Metrics Route
+          </button>
+        </div>
       </div>
 
       {/* Progress steps */}
