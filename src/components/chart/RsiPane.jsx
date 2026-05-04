@@ -1,22 +1,21 @@
 import { useEffect, useRef } from 'react'
 import { createChart, CrosshairMode } from 'lightweight-charts'
 import { useTheme, useThemeStore } from '../../store/useThemeStore'
-import { useSimStore } from '../../store/useSimStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
-import { buildLine } from '../../utils/indicators'
-import { msToSeconds } from '../../utils/tradingUtils'
+import { chartUnixSeconds } from '../../utils/tradingUtils'
 
 /**
  * RSI sub-pane chart. Only mounted when indicator.rsi is enabled.
  * Populates `rsiR` refs for the sim engine.
  *
- * @param {{ rsiR, bars, times, rsiVals }} props
+ * Series data is filled by {@link ../../hooks/useSimEngine seekTo/processBar}; the pane mounts with empty series to avoid slicing mismatch (primary cursor ≠ higher‑TF indices).
+ *
+ * @param {{ rsiR, bars, times, rsiVals, mainChartRef }} props
  */
 export function RsiPane({ rsiR, bars, times, rsiVals, mainChartRef }) {
   const containerRef = useRef(null)
   const C = useTheme()
   const dark = useThemeStore((s) => s.dark)
-  const cursor = useSimStore((s) => s.cursor)
   const indic = useIndicatorStore()
   const rsiPeriod = indic.rsi.period
 
@@ -50,14 +49,9 @@ export function RsiPane({ rsiR, bars, times, rsiVals, mainChartRef }) {
       color: C.green + '60', lineWidth: 1, lastValueVisible: true, priceLineVisible: true, lineStyle: 2,
     })
 
-    // Set initial data up to cursor only
-    if (rsiVals && rsiVals.length > 0) {
-      rsiSeries.setData(buildLine(rsiVals, cursor, times))
-    }
-    // ob/os lines also sliced to cursor
-    const slicedBars = bars.slice(0, cursor)
-    ob.setData(slicedBars.map((b) => ({ time: msToSeconds(b.time), value: 70 })))
-    os.setData(slicedBars.map((b) => ({ time: msToSeconds(b.time), value: 30 })))
+    rsiSeries.setData([])
+    ob.setData([])
+    os.setData([])
 
     // Fit content to show all data
     chart.timeScale().fitContent()
@@ -77,12 +71,19 @@ export function RsiPane({ rsiR, bars, times, rsiVals, mainChartRef }) {
 
     // ── Sync crosshair movement ──
     const handleMainCrosshairMove = (param) => {
-      if (param && param.time) {
-        // Set crosshair on RSI chart at the same time position
-        chart.setCrosshairPosition(
-          { price: 50, time: param.time },
-          rsiSeries
-        )
+      if (param?.time !== undefined && param.time !== null) {
+        const raw = param.time
+        const time =
+          typeof raw === 'number'
+            ? chartUnixSeconds(raw)
+            : typeof raw === 'object' && raw?.timestamp !== undefined
+              ? chartUnixSeconds(raw.timestamp)
+              : null
+        if (time) {
+          chart.setCrosshairPosition({ price: 50, time }, rsiSeries)
+        } else {
+          chart.clearCrosshairPosition()
+        }
       } else {
         chart.clearCrosshairPosition()
       }
@@ -105,7 +106,7 @@ export function RsiPane({ rsiR, bars, times, rsiVals, mainChartRef }) {
       rsiR.ob.current = null
       rsiR.os.current = null
     }
-  }, [bars]) // ← Added rsiR to deps
+  }, [bars, times, rsiVals, rsiPeriod, mainChartRef, rsiR])
 
   // Theme update
   useEffect(() => {

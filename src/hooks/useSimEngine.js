@@ -4,10 +4,51 @@ import { useTradeStore } from '../store/useTradeStore'
 import { useIndicatorStore } from '../store/useIndicatorStore'
 import { BASE_MS, getTimeframeMs } from '../constants'
 import { buildLine } from '../utils/indicators'
-import { msToSeconds } from '../utils/tradingUtils'
+import { chartUnixSeconds, msToSeconds } from '../utils/tradingUtils'
 
 const G33 = '#36d47c33'
 const R33 = '#f0505033'
+
+function clearRsiSeries(rsiR) {
+  rsiR?.series?.current?.setData([])
+  rsiR?.ob?.current?.setData([])
+  rsiR?.os?.current?.setData([])
+}
+
+/**
+ * RSI uses only `setData` (never `series.update`): mixing `update` with `setData`
+ * triggers lightweight-charts "Cannot update oldest data" when internal bar times differ.
+ */
+function applyRsiPaneSlice(rsiR, rsiVals, timesArr, allBars, endExclusiveIdx, rsiEnabled) {
+  if (!rsiEnabled) {
+    clearRsiSeries(rsiR)
+    return
+  }
+  const s = rsiR?.series?.current
+  if (!s || !rsiVals?.length || !timesArr?.length || endExclusiveIdx <= 0 || !allBars?.length) {
+    clearRsiSeries(rsiR)
+    return
+  }
+  const n = Math.min(endExclusiveIdx, rsiVals.length, timesArr.length, allBars.length)
+  if (n <= 0) {
+    clearRsiSeries(rsiR)
+    return
+  }
+
+  const line = buildLine(rsiVals, n, timesArr)
+  s.setData(line)
+  const bandBars = allBars.slice(0, n)
+  const obPts = []
+  const osPts = []
+  for (const b of bandBars) {
+    const t = chartUnixSeconds(b.time)
+    if (!t) continue
+    obPts.push({ time: t, value: 70 })
+    osPts.push({ time: t, value: 30 })
+  }
+  rsiR.ob.current?.setData(obPts)
+  rsiR.os.current?.setData(osPts)
+}
 
 /**
  * Central simulation engine hook.
@@ -130,18 +171,20 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
       Object.entries(refs.ema).forEach(([period, ref]) => {
         const values = emaData[Number(period)]
         if (values && idx < values.length && values[idx] !== null && ref?.current) {
-          const t = barData.time
-          const time = typeof t === 'string' ? Number(t) : Math.floor(t)  // guarantee number
-          ref.current.update({ time, value: values[idx] })
+          const time = chartUnixSeconds(barData.time)
+          if (time) ref.current.update({ time, value: values[idx] })
         }
       })
     }
 
     // Bollinger Bands - check enabled flag
     if (ic.bb.enabled && data.bb && data.bb.upper[idx] !== null) {
-      refs.bbMid.current?.update({ time: barData.time, value: data.bb.mid[idx] })
-      refs.bbUp.current?.update({ time: barData.time, value: data.bb.upper[idx] })
-      refs.bbLow.current?.update({ time: barData.time, value: data.bb.lower[idx] })
+      const tb = chartUnixSeconds(barData.time)
+      if (tb) {
+        refs.bbMid.current?.update({ time: tb, value: data.bb.mid[idx] })
+        refs.bbUp.current?.update({ time: tb, value: data.bb.upper[idx] })
+        refs.bbLow.current?.update({ time: tb, value: data.bb.lower[idx] })
+      }
     }
   }, [emaPeriods])
 
@@ -154,19 +197,23 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
       const barForChart = { ...bar, time: msToSeconds(bar.time) }
 
       // Update primary chart (or single chart)
-      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema: emaValues, bb: bbData, rsi: rsiVals }
-      const primaryRefs = isMultiTimeframe ? simChartData[primaryTF]?.refs : chartR
+      const primaryEntry = simChartData?.[primaryTF]
+      const primaryData = primaryEntry?.data ?? { ema: emaValues, bb: bbData, rsi: rsiVals }
+      const primaryRefs = primaryEntry?.refs ?? chartR
+      const primaryRsiRefs = primaryEntry?.rsiR ?? rsiR
 
       // console.log(`primaryRefs:`, primaryRefs, `primaryRefs.candle?.current:`, !!primaryRefs?.candle?.current)
 
       updateSingleChart(primaryRefs, barForChart, idx, ic, primaryData)
 
-      // Update RSI (only in single timeframe mode)
-      if (ic.rsi.enabled && rsiVals && rsiVals[idx] !== null) {
-        rsiR.series.current?.update({ time: barForChart.time, value: rsiVals[idx] })
-        rsiR.ob.current?.update({ time: barForChart.time, value: 70 })
-        rsiR.os.current?.update({ time: barForChart.time, value: 30 })
-      }
+      applyRsiPaneSlice(
+        primaryRsiRefs,
+        primaryData.rsi,
+        primaryData.times ?? times,
+        primaryData.bars ?? bars,
+        idx + 1,
+        ic.rsi.enabled,
+      )
 
       // ── Update other timeframes in multi-timeframe mode ──
       if (isMultiTimeframe && simChartData) {
@@ -196,6 +243,15 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
 
           // Update the other timeframe's chart
           updateSingleChart(tfRefs, tfBarForChart, tfBarIdx, ic, tfData)
+
+          applyRsiPaneSlice(
+            simChartData[tf]?.rsiR,
+            tfData.rsi,
+            tfData.times,
+            tfData.bars,
+            tfBarIdx + 1,
+            ic.rsi.enabled,
+          )
         })
       }
     },
@@ -242,46 +298,42 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
         color: b.close >= b.open ? G33 : R33,
       }))
 
-      // Update primary chart (or single chart)
-      const primaryData = isMultiTimeframe ? simChartData[primaryTF]?.data : { ema: emaValues, bb: bbData, rsi: rsiVals, times }
-      const primaryRefs = isMultiTimeframe ? simChartData[primaryTF]?.refs : chartR
+      const primaryEntry = simChartData?.[primaryTF]
+      const primaryData = primaryEntry?.data ?? { ema: emaValues, bb: bbData, rsi: rsiVals, times, bars }
+      const primaryRefs = primaryEntry?.refs ?? chartR
+      const primaryRsiRefs = primaryEntry?.rsiR ?? rsiR
 
       primaryRefs.candle.current?.setData(candleData)
       primaryRefs.vol.current?.setData(volData)
 
+      const primaryTimes = primaryData.times ?? times
+      const primaryBarsSeek = primaryData.bars ?? bars
+
       // Update EMA lines
       if (ic.ema.enabled && primaryRefs.ema) {
-        const emaData = isMultiTimeframe ? simChartData[primaryTF]?.data?.ema : emaValues
+        const emaData = primaryData.ema ?? emaValues
         Object.entries(primaryRefs.ema).forEach(([period, ref]) => {
           const values = emaData?.[Number(period)]
-          ref?.current?.setData(values ? buildLine(values, target, times) : [])
+          ref?.current?.setData(values ? buildLine(values, target, primaryTimes) : [])
         })
       } else if (primaryRefs.ema) {
         Object.values(primaryRefs.ema).forEach(ref => ref?.current?.setData([]))
       }
 
       // Update BB
-      if (ic.bb) {
-        primaryRefs.bbMid.current?.setData(buildLine(bbData.mid, target, times))
-        primaryRefs.bbUp.current?.setData(buildLine(bbData.upper, target, times))
-        primaryRefs.bbLow.current?.setData(buildLine(bbData.lower, target, times))
+      const pb = primaryData.bb ?? bbData
+      if (ic.bb.enabled) {
+        primaryRefs.bbMid.current?.setData(buildLine(pb.mid, target, primaryTimes))
+        primaryRefs.bbUp.current?.setData(buildLine(pb.upper, target, primaryTimes))
+        primaryRefs.bbLow.current?.setData(buildLine(pb.lower, target, primaryTimes))
       } else {
         primaryRefs.bbMid.current?.setData([])
         primaryRefs.bbUp.current?.setData([])
         primaryRefs.bbLow.current?.setData([])
       }
 
-      // Update RSI
-      if (ic.rsi.enabled) {
-        rsiR.series.current?.setData(buildLine(rsiVals, target, times))
-        const slicedBars = bars.slice(0, target)
-        rsiR.ob.current?.setData(slicedBars.map(b => ({ time: msToSeconds(b.time), value: 70 })))
-        rsiR.os.current?.setData(slicedBars.map(b => ({ time: msToSeconds(b.time), value: 30 })))
-      } else {
-        rsiR.series.current?.setData([])
-        rsiR.ob.current?.setData([])
-        rsiR.os.current?.setData([])
-      }
+      const pRsi = primaryData.rsi ?? rsiVals
+      applyRsiPaneSlice(primaryRsiRefs, pRsi, primaryTimes, primaryBarsSeek, target, ic.rsi.enabled)
 
       // ── Update other timeframes in multi-timeframe mode ──
       if (isMultiTimeframe && simChartData && targetTime) {
@@ -307,6 +359,7 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
             tfRefs.bbMid.current?.setData([])
             tfRefs.bbUp.current?.setData([])
             tfRefs.bbLow.current?.setData([])
+            clearRsiSeries(simChartData[tf]?.rsiR)
             return
           }
 
@@ -334,16 +387,19 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
              })
            }
 
+          const tfSliceLen = tfTarget + 1
           // Update BB
-          if (ic.bb) {
-            tfRefs.bbMid.current?.setData(buildLine(tfData.bb.mid, tfTarget + 1, tfData.times))
-            tfRefs.bbUp.current?.setData(buildLine(tfData.bb.upper, tfTarget + 1, tfData.times))
-            tfRefs.bbLow.current?.setData(buildLine(tfData.bb.lower, tfTarget + 1, tfData.times))
+          if (ic.bb.enabled) {
+            tfRefs.bbMid.current?.setData(buildLine(tfData.bb.mid, tfSliceLen, tfData.times))
+            tfRefs.bbUp.current?.setData(buildLine(tfData.bb.upper, tfSliceLen, tfData.times))
+            tfRefs.bbLow.current?.setData(buildLine(tfData.bb.lower, tfSliceLen, tfData.times))
           } else {
             tfRefs.bbMid.current?.setData([])
             tfRefs.bbUp.current?.setData([])
             tfRefs.bbLow.current?.setData([])
           }
+
+          applyRsiPaneSlice(simChartData[tf]?.rsiR, tfData.rsi, tfData.times, tfData.bars, tfSliceLen, ic.rsi.enabled)
         })
       }
     },

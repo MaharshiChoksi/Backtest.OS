@@ -2,8 +2,42 @@
  * Convert milliseconds timestamp to seconds (required by TradingView)
  */
 export function msToSeconds(ms) {
-  if (ms > 1e12) return Math.floor(ms / 1000)
-  return ms
+  if (ms === null || ms === undefined) return 0
+  const n = typeof ms === 'string' ? Number(ms) : ms
+  if (typeof n !== 'number' || Number.isNaN(n)) return 0
+  if (n > 1e12) return Math.floor(n / 1000)
+  return Math.floor(n)
+}
+
+/**
+ * Coerce chart timestamps (ms, seconds, ISO string, Date, etc.) to **UTC unix seconds**.
+ * Used for Lightweight Charts (`UTCTimestamp`); returns `null` if not convertible.
+ */
+export function seriesTimeSeconds(t) {
+  if (t == null) return null
+  if (typeof t === 'number' && Number.isFinite(t)) {
+    return t > 1e12 ? Math.floor(t / 1000) : Math.floor(t)
+  }
+  if (typeof t === 'bigint') return seriesTimeSeconds(Number(t))
+  if (typeof t === 'string' && t !== '') return seriesTimeSeconds(Number(t))
+  if (typeof t !== 'object') return null
+  if (t instanceof Date) {
+    const ms = t.getTime()
+    return Number.isFinite(ms) ? Math.floor(ms / 1000) : null
+  }
+  // Crosshair payloads / adapters sometimes pass `{ timestamp: ms }`
+  if (typeof t.timestamp === 'number' && Number.isFinite(t.timestamp)) {
+    return seriesTimeSeconds(t.timestamp)
+  }
+  if (typeof t.valueOf === 'function') return seriesTimeSeconds(t.valueOf())
+  return null
+}
+
+/**
+ * Like {@link seriesTimeSeconds} but never null — `0` means “missing” (caller should skip points).
+ */
+export function chartUnixSeconds(ts) {
+  return seriesTimeSeconds(ts) ?? 0
 }
 
 /**
