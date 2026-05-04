@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { createChart, CrosshairMode } from 'lightweight-charts'
+import { DrawingManager } from 'lightweight-charts-drawing'
 import { useTheme, useThemeStore } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
 import { useTradeStore } from '../../store/useTradeStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
+import { useDrawingStore } from '../../store/useDrawingStore'
 import { buildLine } from '../../utils/indicators'
 import { getDecimalPlaces, msToSeconds } from '../../utils/tradingUtils'
 
@@ -167,6 +169,9 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
     chartR.bbUp.current = bUp
     chartR.bbLow.current = bLow
 
+    // ── Initialize DrawingManager ──
+    useDrawingStore.getState().initManager(chart, candle, containerRef.current)
+
     // ── ResizeObserver for responsive sizing (fires when container size changes) ──
     resizeObserverRef.current = new ResizeObserver((entries) => {
       for (let entry of entries) {
@@ -187,6 +192,8 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       if (resizeObserverRef.current) {
         resizeObserverRef.current.disconnect()
       }
+      // Destroy DrawingManager
+      useDrawingStore.getState().destroyManager()
       chart.remove()
       chartR.chart.current = null
       chartR.candle.current = null

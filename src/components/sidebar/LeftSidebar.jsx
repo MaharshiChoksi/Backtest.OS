@@ -3,6 +3,8 @@ import { useTheme } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
 import { useTradeStore } from '../../store/useTradeStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
+import { useDrawingStore } from '../../store/useDrawingStore'
+import { TOOL_DEFINITIONS } from 'lightweight-charts-drawing'
 import { getDecimalPlaces, getExitPrice } from '../../utils/tradingUtils'
 import { FONT } from '../../constants'
 import { fmt, fmtPnl, fmtShortDate } from '../../utils/format'
@@ -13,8 +15,9 @@ export function LeftSidebar({ ema20v, ema50v, bbData, rsiVals }) {
   const [tab, setTab] = useState('info')
   const analysisMode = useSimStore((s) => s.analysisMode)
   const indic = useIndicatorStore()
-  const [selectedTool, setSelectedTool] = useState('cursor')
-  const [mockDrawings, setMockDrawings] = useState([])
+  const selectedTool = useDrawingStore((s) => s.activeTool)
+  const setSelectedTool = useDrawingStore((s) => s.setActiveTool)
+  const mockDrawings = useDrawingStore((s) => s.drawings)
 
   // Build EMA values map for display
   const emaValues = useMemo(() => {
@@ -26,6 +29,9 @@ export function LeftSidebar({ ema20v, ema50v, bbData, rsiVals }) {
     return result
   }, [indic.ema.enabled, ema20v, ema50v])
 
+  const removeDrawing = useDrawingStore((s) => s.removeDrawing)
+  const clearAll = useDrawingStore((s) => s.clearAll)
+
   return (
     <div style={{ width: 250, background: C.surf, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
       <TabBar tabs={['info', 'indic', 'tools', 'drawings']} active={tab} onChange={setTab} />
@@ -36,8 +42,8 @@ export function LeftSidebar({ ema20v, ema50v, bbData, rsiVals }) {
         {tab === 'drawings' && (
           <DrawingsManagerTab
             drawings={mockDrawings}
-            onRemoveDrawing={(id) => setMockDrawings((prev) => prev.filter((d) => d.id !== id))}
-            onClearAll={() => setMockDrawings([])}
+            onRemoveDrawing={removeDrawing}
+            onClearAll={clearAll}
           />
         )}
       </div>
@@ -45,119 +51,57 @@ export function LeftSidebar({ ema20v, ema50v, bbData, rsiVals }) {
   )
 }
 
-// ── TOOLS tab (all lightweight-charts-drawing tools) ─────────────────────
+// ── TOOLS tab (dynamic from TOOL_DEFINITIONS) ────────────────────────
+// Category label mapping
+const CATEGORY_LABELS = {
+  line: 'Lines',
+  channel: 'Channels',
+  pitchfork: 'Pitchforks',
+  fibonacci: 'Fibonacci',
+  gann: 'Gann',
+  forecasting: 'Forecasting',
+  measurement: 'Measurement',
+  shape: 'Shapes',
+  annotation: 'Annotations',
+  trading: 'Trading',
+}
+
 function ToolsTab({ selectedTool, setSelectedTool }) {
   const C = useTheme()
-  const toolCategories = [
-    {
-      label: 'Lines',
-      tools: [
-        { id: 'cursor', label: 'Cursor' },
-        { id: 'TrendLine', label: 'Trend Line' },
-        { id: 'Ray', label: 'Ray' },
-        { id: 'HorizontalLine', label: 'Horizontal Line' },
-        { id: 'VerticalLine', label: 'Vertical Line' },
-        { id: 'ExtendedLine', label: 'Extended Line' },
-        { id: 'CrossLine', label: 'Cross Line' },
-        { id: 'InfoLine', label: 'Info Line' },
-        { id: 'TrendAngle', label: 'Trend Angle' },
-        { id: 'HorizontalRay', label: 'Horizontal Ray' },
-        { id: 'Arrow', label: 'Arrow' },
-      ],
-    },
-    {
-      label: 'Channels',
-      tools: [
-        { id: 'ParallelChannel', label: 'Parallel Channel' },
-        { id: 'RegressionTrend', label: 'Regression Trend' },
-        { id: 'FlatTopBottom', label: 'Flat Top/Bottom' },
-        { id: 'DisjointChannel', label: 'Disjoint Channel' },
-      ],
-    },
-    {
-      label: 'Pitchforks',
-      tools: [
-        { id: 'AndrewsPitchfork', label: "Andrew's Pitchfork" },
-        { id: 'SchiffPitchfork', label: 'Schiff Pitchfork' },
-        { id: 'ModifiedSchiffPitchfork', label: 'Modified Schiff' },
-        { id: 'InsidePitchfork', label: 'Inside Pitchfork' },
-      ],
-    },
-    {
-      label: 'Fibonacci',
-      tools: [
-        { id: 'FibRetracement', label: 'Fib Retracement' },
-        { id: 'FibExtension', label: 'Fib Extension' },
-        { id: 'FibChannel', label: 'Fib Channel' },
-        { id: 'FibTimeZone', label: 'Fib Time Zone' },
-        { id: 'FibSpeedFan', label: 'Fib Speed Fan' },
-        { id: 'FibTimeExtension', label: 'Fib Time Ext' },
-        { id: 'FibCircles', label: 'Fib Circles' },
-        { id: 'FibSpiral', label: 'Fib Spiral' },
-        { id: 'FibArcs', label: 'Fib Arcs' },
-        { id: 'FibWedge', label: 'Fib Wedge' },
-        { id: 'Pitchfan', label: 'Pitchfan' },
-      ],
-    },
-    {
-      label: 'Gann',
-      tools: [
-        { id: 'GannBox', label: 'Gann Box' },
-        { id: 'GannFan', label: 'Gann Fan' },
-        { id: 'GannSquareFixed', label: 'Gann Square Fixed' },
-        { id: 'GannSquare', label: 'Gann Square' },
-      ],
-    },
-    {
-      label: 'Forecasting',
-      tools: [
-        { id: 'LongPosition', label: 'Long Position' },
-        { id: 'ShortPosition', label: 'Short Position' },
-        { id: 'DateRange', label: 'Date Range' },
-        { id: 'DatePriceRange', label: 'Date/Price Range' },
-        { id: 'Projection', label: 'Projection' },
-        { id: 'Forecast', label: 'Forecast' },
-        { id: 'BarsPattern', label: 'Bars Pattern' },
-      ],
-    },
-    {
-      label: 'Shapes',
-      tools: [
-        { id: 'Rectangle', label: 'Rectangle' },
-        { id: 'RotatedRectangle', label: 'Rotated Rectangle' },
-        { id: 'Circle', label: 'Circle' },
-        { id: 'Triangle', label: 'Triangle' },
-        { id: 'Ellipse', label: 'Ellipse' },
-        { id: 'Arc', label: 'Arc' },
-        { id: 'Path', label: 'Path' },
-        { id: 'Polyline', label: 'Polyline' },
-        { id: 'Curve', label: 'Curve' },
-        { id: 'DoubleCurve', label: 'Double Curve' },
-        { id: 'PriceRange', label: 'Price Range' },
-      ],
-    },
-    {
-      label: 'Annotations',
-      tools: [
-        { id: 'TextAnnotation', label: 'Text' },
-        { id: 'Callout', label: 'Callout' },
-        { id: 'AnchoredText', label: 'Anchored Text' },
-        { id: 'Note', label: 'Note' },
-        { id: 'PriceNote', label: 'Price Note' },
-        { id: 'PriceLabel', label: 'Price Label' },
-        { id: 'FlagMark', label: 'Flag' },
-        { id: 'Pin', label: 'Pin' },
-        { id: 'Comment', label: 'Comment' },
-        { id: 'Signpost', label: 'Signpost' },
-        { id: 'Table', label: 'Table' },
-        { id: 'Brush', label: 'Brush' },
-        { id: 'Highlighter', label: 'Highlighter' },
-        { id: 'ArrowMarker', label: 'Arrow Marker' },
-        { id: 'ArrowMarkUp', label: 'Arrow Up' },
-        { id: 'ArrowMarkDown', label: 'Arrow Down' },
-      ],
-    },
-  ]
+
+  // Build tool categories dynamically from TOOL_DEFINITIONS
+  const toolCategories = useMemo(() => {
+    const grouped = {}
+
+    // Add cursor tool as a special case
+    grouped['cursor'] = {
+      label: 'General',
+      tools: [{ id: 'cursor', label: 'Cursor' }],
+    }
+
+    // Group tools by category
+    if (TOOL_DEFINITIONS && Array.isArray(TOOL_DEFINITIONS)) {
+      TOOL_DEFINITIONS.forEach((tool) => {
+        const cat = tool.category || 'other'
+        if (!grouped[cat]) {
+          grouped[cat] = {
+            label: CATEGORY_LABELS[cat] || cat,
+            tools: [],
+          }
+        }
+        grouped[cat].tools.push({
+          id: tool.type,
+          label: tool.name,
+        })
+      })
+    }
+
+    // Return as array in a sensible order
+    return Object.values(grouped).sort((a, b) => {
+      const order = ['General', 'Lines', 'Channels', 'Pitchforks', 'Fibonacci', 'Gann', 'Forecasting', 'Measurement', 'Shapes', 'Annotations', 'Trading']
+      return order.indexOf(a.label) - order.indexOf(b.label)
+    })
+  }, [])
 
   const allTools = toolCategories.flatMap((cat) => cat.tools)
   const activeToolLabel = allTools.find((t) => t.id === selectedTool)?.label || 'Cursor'
@@ -166,8 +110,13 @@ function ToolsTab({ selectedTool, setSelectedTool }) {
     <>
       <SectionHeader>Chart Tools</SectionHeader>
       <div style={{ color: C.muted, fontSize: 11, marginBottom: 10, lineHeight: 1.4 }}>
-        UI phase only. Rendering/integration with `lightweight-charts-drawing` will be wired next.
+        Select a tool to draw on chart. Click "Cursor" to return to normal interaction.
       </div>
+
+      <Divider />
+      <Kv label="Active Tool" value={activeToolLabel} color={C.amber} />
+      <Divider />
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {toolCategories.map((cat) => (
           <div key={cat.label}>
@@ -199,19 +148,24 @@ function ToolsTab({ selectedTool, setSelectedTool }) {
           </div>
         ))}
       </div>
-      <Divider />
-      <Kv label="Active Tool" value={activeToolLabel} color={C.amber} />
     </>
   )
 }
-// ── DRAWINGS tab (manager UI only) ──────────────────────────────────────────
+// ── DRAWINGS tab (connected to DrawingManager) ─────────────────────────────
 function DrawingsManagerTab({ drawings, onRemoveDrawing, onClearAll }) {
   const C = useTheme()
+  const selectDrawing = useDrawingStore((s) => s.selectDrawing)
+  const deselectAll = useDrawingStore((s) => s.deselectAll)
+
+  const handleSelect = (id) => {
+    selectDrawing(id)
+  }
+
   return (
     <>
       <SectionHeader>Drawings Manager</SectionHeader>
       <div style={{ color: C.muted, fontSize: 11, marginBottom: 10, lineHeight: 1.4 }}>
-        Replaces the old drawings list flow. Use this tab to remove individual drawings or clear all once chart binding is enabled.
+        Manage your chart drawings. Click a drawing to select it.
       </div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
         <button
@@ -231,16 +185,34 @@ function DrawingsManagerTab({ drawings, onRemoveDrawing, onClearAll }) {
         >
           Clear All
         </button>
+        <button
+          onClick={deselectAll}
+          disabled={!drawings.length}
+          style={{
+            flex: 1,
+            border: `1px solid ${C.border2}`,
+            background: C.surf2,
+            color: C.muted,
+            borderRadius: 4,
+            padding: '7px 8px',
+            fontSize: 10,
+            cursor: drawings.length ? 'pointer' : 'not-allowed',
+            fontFamily: FONT,
+          }}
+        >
+          Deselect
+        </button>
       </div>
       {!drawings.length ? (
         <div style={{ color: C.dim, fontSize: 11, padding: '10px 0' }}>
-          No drawings yet.
+          No drawings yet. Select a tool and draw on the chart.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {drawings.map((d) => (
             <div
               key={d.id}
+              onClick={() => handleSelect(d.id)}
               style={{
                 border: `1px solid ${C.border2}`,
                 borderRadius: 4,
@@ -250,16 +222,29 @@ function DrawingsManagerTab({ drawings, onRemoveDrawing, onClearAll }) {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: 8,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = C.amber
+                e.currentTarget.style.background = C.surf3
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = C.border2
+                e.currentTarget.style.background = C.surf2
               }}
             >
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 11, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {d.type || 'Drawing'}
+                  {d.typeLabel || d.type || 'Drawing'}
                 </div>
-                <div style={{ fontSize: 10, color: C.muted }}>{d.timeframe || '—'}</div>
+                <div style={{ fontSize: 10, color: C.muted }}>ID: {d.id}</div>
               </div>
               <button
-                onClick={() => onRemoveDrawing(d.id)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRemoveDrawing(d.id)
+                }}
                 style={{
                   border: `1px solid ${C.red}66`,
                   background: 'transparent',
