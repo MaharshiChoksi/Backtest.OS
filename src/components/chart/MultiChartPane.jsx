@@ -3,13 +3,14 @@ import { useSimStore } from '../../store/useSimStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
 import { calcEMA, calcRSI, calcBB, calcEMAs } from '../../utils/indicators'
 import { ChartPane } from './ChartPane'
+import { RsiPane } from './RsiPane'
 
 /**
  * Renders 1-3 charts in custom layout:
  * - 1 chart on left side (full height)
  * - 2 charts on right side (stacked vertically)
  */
-export function MultiChartPane({ chartRefs, rsiRefs }) {
+export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
   const selectedTimeframes = useSimStore((s) => s.selectedTimeframes)
   const barsMap = useSimStore((s) => s.barsMap)
   const symbolConfig = useSimStore((s) => s.symbolConfig)
@@ -65,6 +66,15 @@ export function MultiChartPane({ chartRefs, rsiRefs }) {
             bbData={indicatorsByTimeframe[tf]?.bb || { mid: [], upper: [], lower: [] }}
             symbolConfig={symbolConfig}
           />
+          {showRsi && rsiRefsMap[tf] ? (
+            <RsiPane
+              rsiR={rsiRefsMap[tf]}
+              bars={barsMap[tf] || []}
+              times={indicatorsByTimeframe[tf]?.times || []}
+              rsiVals={indicatorsByTimeframe[tf]?.rsi || []}
+              mainChartRef={chartRefs[tf]?.chart}
+            />
+          ) : null}
         </div>
       </div>
     )
@@ -89,6 +99,15 @@ export function MultiChartPane({ chartRefs, rsiRefs }) {
             bbData={indicatorsByTimeframe[tf1]?.bb || { mid: [], upper: [], lower: [] }}
             symbolConfig={symbolConfig}
           />
+          {showRsi && rsiRefsMap[tf1] ? (
+            <RsiPane
+              rsiR={rsiRefsMap[tf1]}
+              bars={barsMap[tf1] || []}
+              times={indicatorsByTimeframe[tf1]?.times || []}
+              rsiVals={indicatorsByTimeframe[tf1]?.rsi || []}
+              mainChartRef={chartRefs[tf1]?.chart}
+            />
+          ) : null}
         </div>
         
         {/* Right chart */}
@@ -105,6 +124,15 @@ export function MultiChartPane({ chartRefs, rsiRefs }) {
             bbData={indicatorsByTimeframe[tf2]?.bb || { mid: [], upper: [], lower: [] }}
             symbolConfig={symbolConfig}
           />
+          {showRsi && rsiRefsMap[tf2] ? (
+            <RsiPane
+              rsiR={rsiRefsMap[tf2]}
+              bars={barsMap[tf2] || []}
+              times={indicatorsByTimeframe[tf2]?.times || []}
+              rsiVals={indicatorsByTimeframe[tf2]?.rsi || []}
+              mainChartRef={chartRefs[tf2]?.chart}
+            />
+          ) : null}
         </div>
       </div>
     )
@@ -128,6 +156,15 @@ export function MultiChartPane({ chartRefs, rsiRefs }) {
           bbData={indicatorsByTimeframe[tf1]?.bb || { mid: [], upper: [], lower: [] }}
           symbolConfig={symbolConfig}
         />
+        {showRsi && rsiRefsMap[tf1] ? (
+          <RsiPane
+            rsiR={rsiRefsMap[tf1]}
+            bars={barsMap[tf1] || []}
+            times={indicatorsByTimeframe[tf1]?.times || []}
+            rsiVals={indicatorsByTimeframe[tf1]?.rsi || []}
+            mainChartRef={chartRefs[tf1]?.chart}
+          />
+        ) : null}
       </div>
       
       {/* Right side - 33% width, 2 stacked charts */}
@@ -146,6 +183,15 @@ export function MultiChartPane({ chartRefs, rsiRefs }) {
             bbData={indicatorsByTimeframe[tf2]?.bb || { mid: [], upper: [], lower: [] }}
             symbolConfig={symbolConfig}
           />
+          {showRsi && rsiRefsMap[tf2] ? (
+            <RsiPane
+              rsiR={rsiRefsMap[tf2]}
+              bars={barsMap[tf2] || []}
+              times={indicatorsByTimeframe[tf2]?.times || []}
+              rsiVals={indicatorsByTimeframe[tf2]?.rsi || []}
+              mainChartRef={chartRefs[tf2]?.chart}
+            />
+          ) : null}
         </div>
         
         {/* Bottom right chart */}
@@ -162,6 +208,15 @@ export function MultiChartPane({ chartRefs, rsiRefs }) {
             bbData={indicatorsByTimeframe[tf3]?.bb || { mid: [], upper: [], lower: [] }}
             symbolConfig={symbolConfig}
           />
+          {showRsi && rsiRefsMap[tf3] ? (
+            <RsiPane
+              rsiR={rsiRefsMap[tf3]}
+              bars={barsMap[tf3] || []}
+              times={indicatorsByTimeframe[tf3]?.times || []}
+              rsiVals={indicatorsByTimeframe[tf3]?.rsi || []}
+              mainChartRef={chartRefs[tf3]?.chart}
+            />
+          ) : null}
         </div>
       </div>
     </div>

@@ -1,3 +1,5 @@
+import { seriesTimeSeconds } from './tradingUtils'
+
 export function calcEMA(vals, period) {
   const k   = 2 / (period + 1)
   const out = new Array(vals.length).fill(null)
@@ -69,9 +71,8 @@ export function buildLine(vals, idx, times) {
   const limit  = Math.min(idx, vals.length, times.length)
   for (let i = 0; i < limit; i++) {
     if (vals[i] !== null && vals[i] !== undefined) {
-      // Convert milliseconds to seconds for TradingView for consistency / certainty
-      const time = times[i]
-      const timeInSeconds = typeof time === 'number' && time > 1e12 ? Math.floor(time / 1000) : time
+      const timeInSeconds = seriesTimeSeconds(times[i])
+      if (timeInSeconds == null) continue
       result.push({ time: timeInSeconds, value: vals[i] })
     }
   }

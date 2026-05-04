@@ -39,15 +39,33 @@ export function Workspace({ onLoadNew }) {
 
   const _rsiChart = useRef(null)
   const _rsiSeries = useRef(null)
-  const _rsiOb = useRef(null)  // add
-  const _rsiOs = useRef(null)  // add
+  const _rsiOb = useRef(null)
+  const _rsiOs = useRef(null)
 
-  const rsiR = useMemo(() => ({
-    chart: _rsiChart,
-    series: _rsiSeries,
-    ob: _rsiOb,   // add
-    os: _rsiOs,   // add
-  }), [])
+  /** Single-chart / default RSI bundle (synced from sim engine) */
+  const rsiRDefault = useMemo(
+    () => ({
+      chart: _rsiChart,
+      series: _rsiSeries,
+      ob: _rsiOb,
+      os: _rsiOs,
+    }),
+    [],
+  )
+
+  /** Multi-chart RSI bundles (slot 1–3 map to ordered selected timeframes) */
+  const _rsiChart_m1 = useRef(null)
+  const _rsiSeries_m1 = useRef(null)
+  const _rsiOb_m1 = useRef(null)
+  const _rsiOs_m1 = useRef(null)
+  const _rsiChart_m2 = useRef(null)
+  const _rsiSeries_m2 = useRef(null)
+  const _rsiOb_m2 = useRef(null)
+  const _rsiOs_m2 = useRef(null)
+  const _rsiChart_m3 = useRef(null)
+  const _rsiSeries_m3 = useRef(null)
+  const _rsiOb_m3 = useRef(null)
+  const _rsiOs_m3 = useRef(null)
   // Force re-render by subscribing to entire store (ensures mount/unmount works)
   const [, forceUpdate] = useState(0)
   useEffect(() => {
@@ -174,14 +192,50 @@ export function Workspace({ onLoadNew }) {
     return map
   }, [isMultiTimeframe, selectedTimeframes])
 
+  /** RSI refs per timeframe key (matches chartRefsMap keys) */
+  const rsiRefsMap = useMemo(() => {
+    const map = {}
+    const multiBundles = [
+      {
+        chart: _rsiChart_m1,
+        series: _rsiSeries_m1,
+        ob: _rsiOb_m1,
+        os: _rsiOs_m1,
+      },
+      {
+        chart: _rsiChart_m2,
+        series: _rsiSeries_m2,
+        ob: _rsiOb_m2,
+        os: _rsiOs_m2,
+      },
+      {
+        chart: _rsiChart_m3,
+        series: _rsiSeries_m3,
+        ob: _rsiOb_m3,
+        os: _rsiOs_m3,
+      },
+    ]
+    if (isMultiTimeframe && selectedTimeframes.length > 1) {
+      selectedTimeframes.forEach((tf, idx) => {
+        if (idx < multiBundles.length) map[tf] = multiBundles[idx]
+      })
+    } else if (isMultiTimeframe && selectedTimeframes.length === 1) {
+      map[selectedTimeframes[0]] = rsiRDefault
+    } else {
+      map.default = rsiRDefault
+    }
+    return map
+  }, [isMultiTimeframe, selectedTimeframes, rsiRDefault])
+
   // For simulation: collect all chart refs and data for multi-timeframe
   const simChartData = useMemo(() => {
     if (!isMultiTimeframe) {
       return {
-        'default': {
-          refs: chartRefsMap['default'],
-          data: allTimeframeData['default']
-        }
+        default: {
+          refs: chartRefsMap.default,
+          data: allTimeframeData.default,
+          rsiR: rsiRefsMap.default,
+        },
       }
     }
 
@@ -189,13 +243,20 @@ export function Workspace({ onLoadNew }) {
     selectedTimeframes.forEach((tf) => {
       result[tf] = {
         refs: chartRefsMap[tf],
-        data: allTimeframeData[tf]
+        data: allTimeframeData[tf],
+        rsiR: rsiRefsMap[tf],
       }
     })
     return result
-  }, [isMultiTimeframe, selectedTimeframes, chartRefsMap, allTimeframeData])
+  }, [isMultiTimeframe, selectedTimeframes, chartRefsMap, allTimeframeData, rsiRefsMap])
 
   // ── Simulation engine ──────────────────────────────────────
+  /** Bundle used by seek/step for RSI (primary driving timeframe) */
+  const primaryRsiR = useMemo(() => {
+    if (!isMultiTimeframe) return simChartData.default?.rsiR
+    return simChartData[primaryTF]?.rsiR
+  }, [isMultiTimeframe, simChartData, primaryTF])
+
   const { seekTo, step, cursorRef } = useSimEngine({
     bars: allTimeframeData[primaryTF].bars,
     times,
@@ -206,7 +267,7 @@ export function Workspace({ onLoadNew }) {
     isMultiTimeframe,
     simChartData,
     primaryTF,
-    rsiR,
+    rsiR: primaryRsiR,
   })
 
   // Initialize charts when workspace loads or bars change
@@ -221,6 +282,16 @@ export function Workspace({ onLoadNew }) {
       }, 50)
     }
   }, [bars.length, seekTo])
+
+  // RSI pans mount with empty series; after toggling RSI on, repaint from engine.
+  const prevShowRsiRef = useRef(showRsi)
+  useEffect(() => {
+    if (showRsi && !prevShowRsiRef.current) {
+      const cur = useSimStore.getState().cursor
+      if (cur >= 1) queueMicrotask(() => seekTo(cur))
+    }
+    prevShowRsiRef.current = showRsi
+  }, [showRsi, seekTo])
 
   const handleReset = () => {
     // Write to store directly — no reactive reads here, no stale closures
@@ -417,7 +488,8 @@ export function Workspace({ onLoadNew }) {
           {selectedTimeframes.length > 1 ? (
             <MultiChartPane
               chartRefs={chartRefsMap}
-              rsiRefs={{}}
+              rsiRefsMap={rsiRefsMap}
+              showRsi={showRsi}
             />
           ) : (
             <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -436,9 +508,9 @@ export function Workspace({ onLoadNew }) {
             </div>
           )
           }
-          {showRsi && selectedTimeframes.length == 1 && (
+          {showRsi && selectedTimeframes.length === 1 && (
             <RsiPane
-              rsiR={rsiR}
+              rsiR={rsiRDefault}
               bars={barData}
               times={times}
               rsiVals={rsiVals}
