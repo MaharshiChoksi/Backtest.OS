@@ -1,5 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { createChart, CrosshairMode } from 'lightweight-charts'
+import {
+  createChart,
+  CrosshairMode,
+  CandlestickSeries,  // v5: imported directly, passed to chart.addSeries()
+  LineSeries,         // v5: replaces chart.addLineSeries()
+  HistogramSeries,    // v5: replaces chart.addHistogramSeries()
+} from 'lightweight-charts'
 import { getToolRegistry } from 'lightweight-charts-drawing'
 import { useTheme, useThemeStore } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
@@ -14,13 +20,12 @@ let drawingIdCounter = 0
 /**
  * Renders the main candlestick + overlay chart.
  *
- * Drawing interaction is implemented manually because lightweight-charts-drawing
- * has no built-in setActiveTool() interactive mode. We follow the exact pattern
- * from the library's demo:
- *   1. On click → convert pixel to { time, price } anchor
- *   2. Accumulate anchors until we have requiredAnchors for the active tool
- *   3. Show a rubber-band preview drawing during placement
- *   4. On final anchor → call registry.createDrawing() then manager.addDrawing()
+ * v5 migration notes:
+ *   - chart.addCandlestickSeries(opts)  →  chart.addSeries(CandlestickSeries, opts)
+ *   - chart.addLineSeries(opts)         →  chart.addSeries(LineSeries, opts)
+ *   - chart.addHistogramSeries(opts)    →  chart.addSeries(HistogramSeries, opts)
+ *   All three series types must now be explicitly imported from 'lightweight-charts'.
+ *   chart.removeSeries() is unchanged.
  *
  * @prop {string} [chartId='default']  Unique key per chart for the DrawingManager map.
  */
@@ -29,15 +34,14 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
   const lastSizeRef  = useRef({ width: 0, height: 0 })
   const resizeObserverRef = useRef(null)
 
-  // Drawing interaction state — kept in refs so event listeners always see current values
-  const managerRef       = useRef(null)
-  const pendingAnchors   = useRef([])
-  const previewDrawing   = useRef(null)
-  const activeToolRef    = useRef(null)  // mirrors store, accessible in closures
+  // Drawing interaction — kept in refs so event listener closures always see current values
+  const managerRef     = useRef(null)
+  const pendingAnchors = useRef([])
+  const previewDrawing = useRef(null)
 
   const C    = useTheme()
   const dark = useThemeStore((s) => s.dark)
-  const cursor     = useSimStore((s) => s.cursor)
+  const cursor      = useSimStore((s) => s.cursor)
   const setHoverBar = useSimStore((s) => s.setHoverBar)
   const indic  = useIndicatorStore()
   const trades = useTradeStore((s) => s.trades)
@@ -45,7 +49,7 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
 
   const decimals = symbolConfig ? getDecimalPlaces(symbolConfig.tick_size) : 5
 
-  // ── Chart init ─────────────────────────────────────────────────────────────
+  // ── Chart initialisation ───────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current || !bars?.length || !symbolConfig) return
 
@@ -78,22 +82,40 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       localization: { locale: 'en-US', dateFormat: 'yyyy-MM-dd', timeFormat: 'HH:mm' },
     })
 
-    const candle = chart.addCandlestickSeries({
-      upColor: C.green, downColor: C.red,
-      borderUpColor: C.green, borderDownColor: C.red,
-      wickUpColor: C.green + '99', wickDownColor: C.red + '99',
+    // ── v5 series creation ─────────────────────────────────────────────────────
+    // All series are now created via chart.addSeries(SeriesType, options).
+    // The old chart.addCandlestickSeries / addLineSeries / addHistogramSeries
+    // methods no longer exist in v5.
+
+    const candle = chart.addSeries(CandlestickSeries, {
+      upColor: C.green,
+      downColor: C.red,
+      borderUpColor: C.green,
+      borderDownColor: C.red,
+      wickUpColor: C.green + '99',
+      wickDownColor: C.red + '99',
       priceFormat: { type: 'price', precision: decimals, minMove },
     })
 
-    const vol = chart.addHistogramSeries({
-      priceFormat: { type: 'volume' }, priceScaleId: 'vol',
-      lastValueVisible: false, priceLineVisible: false,
+    const vol = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'vol',
+      lastValueVisible: false,
+      priceLineVisible: false,
     })
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: false })
 
+    // Shared helper for all overlay line series (EMA, BB bands)
     const mkLine = (color, w = 1, style = 0) =>
-      chart.addLineSeries({ color, lineWidth: w, lastValueVisible: false, priceLineVisible: false, lineStyle: style })
+      chart.addSeries(LineSeries, {
+        color,
+        lineWidth: w,
+        lineStyle: style,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      })
 
+    // ── EMA lines ──────────────────────────────────────────────────────────────
     const emaLines = {}
     chartR.ema = {}
     if (indic.ema.enabled && emaPeriods) {
@@ -104,6 +126,7 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       })
     }
 
+    // ── Bollinger Bands ─────────────────────────────────────────────────────────
     let bMid, bUp, bLow
     if (indic.bb.enabled) {
       bMid = mkLine(C.blue + 'aa')
@@ -111,10 +134,12 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       bLow = mkLine(C.blue + '55')
     }
 
+    // ── Seed initial data up to current cursor ──────────────────────────────────
     const slice      = bars.slice(0, cursor)
     const candleData = slice.map(b => ({ ...b, time: msToSeconds(b.time) }))
     const volData    = slice.map(b => ({
-      time: msToSeconds(b.time), value: b.volume,
+      time:  msToSeconds(b.time),
+      value: b.volume,
       color: b.close >= b.open ? C.green + '33' : C.red + '33',
     }))
     candle.setData(candleData)
@@ -141,6 +166,7 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       if (d) setHoverBar(d)
     })
 
+    // ── Populate refs for sim engine ────────────────────────────────────────────
     chartR.chart.current  = chart
     chartR.candle.current = candle
     chartR.vol.current    = vol
@@ -148,10 +174,11 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
     chartR.bbUp.current   = bUp
     chartR.bbLow.current  = bLow
 
-    // Init DrawingManager and store ref for interaction effects
+    // ── Drawing manager ─────────────────────────────────────────────────────────
     const manager = useDrawingStore.getState().initManager(chartId, chart, candle, containerRef.current)
     managerRef.current = manager
 
+    // ── ResizeObserver ──────────────────────────────────────────────────────────
     resizeObserverRef.current = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (chartR.chart.current && entry.contentRect) {
@@ -170,31 +197,24 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       managerRef.current = null
       chart.remove()
       chartR.chart.current = chartR.candle.current = chartR.vol.current = null
-      chartR.bbMid.current = chartR.bbUp.current = chartR.bbLow.current = null
+      chartR.bbMid.current = chartR.bbUp.current   = chartR.bbLow.current = null
       chartR.ema = {}
     }
   }, [bars, symbolConfig, indic.ema.enabled, indic.bb.enabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Drawing interaction ────────────────────────────────────────────────────
-  // This effect re-runs whenever activeTool changes, wiring/unwiring the correct
-  // click and mousemove handlers for the currently selected drawing tool.
-  useEffect(() => {
-    return useDrawingStore.subscribe(
-      (state) => state.activeTool,
-      (tool) => { activeToolRef.current = tool }
-    )
-  }, [])
-
+  // ── Drawing interaction loop ────────────────────────────────────────────────
+  // The library has no built-in interactive mode. Every anchor must be collected
+  // manually from DOM click events and fed to registry.createDrawing().
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
-    // Helpers to convert DOM pixel coords → chart anchor
-    const toAnchor = (event) => {
-      const chart   = chartR.chart.current
-      const candle  = chartR.candle.current
-      if (!chart || !candle) return null
+    const PREVIEW_ID = `__preview_${chartId}__`
 
+    const toAnchor = (event) => {
+      const chart  = chartR.chart.current
+      const candle = chartR.candle.current
+      if (!chart || !candle) return null
       const rect  = container.getBoundingClientRect()
       const x     = event.clientX - rect.left
       const y     = event.clientY - rect.top
@@ -203,8 +223,6 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       if (time === null || price === null) return null
       return { time, price }
     }
-
-    const PREVIEW_ID = `__preview_${chartId}__`
 
     const removePreview = () => {
       if (previewDrawing.current) {
@@ -218,7 +236,6 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       pendingAnchors.current = []
     }
 
-    // ── Click handler ──────────────────────────────────────────────────────
     const handleClick = (event) => {
       const tool = useDrawingStore.getState().activeTool
       if (!tool || !managerRef.current) return
@@ -234,7 +251,6 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       pendingAnchors.current.push(anchor)
 
       if (pendingAnchors.current.length >= required) {
-        // Drawing is complete — create the final drawing
         removePreview()
         const id      = `drawing-${++drawingIdCounter}`
         const anchors = [...pendingAnchors.current]
@@ -250,7 +266,7 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
           managerRef.current.selectDrawing(id)
         }
       } else {
-        // First anchor placed — init/update preview
+        // First anchor placed — init rubber-band preview
         const previewAnchors = [
           ...pendingAnchors.current,
           ...Array(required - pendingAnchors.current.length).fill(anchor),
@@ -268,7 +284,6 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       }
     }
 
-    // ── Mouse move handler — rubber-band preview ──────────────────────────
     const handleMouseMove = (event) => {
       const tool = useDrawingStore.getState().activeTool
       if (!tool || !previewDrawing.current || pendingAnchors.current.length === 0) return
@@ -280,14 +295,11 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       const toolDef  = registry.get(tool)
       if (!toolDef) return
 
-      // Update the "in-flight" anchor (the one following the mouse)
-      const updateIndex = pendingAnchors.current.length
       try {
-        previewDrawing.current.updateAnchor(updateIndex, anchor)
+        previewDrawing.current.updateAnchor(pendingAnchors.current.length, anchor)
       } catch (_) {}
     }
 
-    // ── Escape — cancel in-progress drawing ──────────────────────────────
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') cancelDrawing()
     }
@@ -296,7 +308,6 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
     container.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('keydown', handleKeyDown)
 
-    // When tool changes (including to null/cursor), cancel any in-progress drawing
     const unsubscribe = useDrawingStore.subscribe(
       (s) => s.activeTool,
       () => cancelDrawing()
@@ -310,7 +321,7 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
     }
   }, [chartId, chartR]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Theme update ────────────────────────────────────────────────────────────
+  // ── Theme update ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!chartR.chart.current) return
     chartR.chart.current.applyOptions({
@@ -327,7 +338,7 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
     })
   }, [dark]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Resize on cursor change ─────────────────────────────────────────────────
+  // ── Resize on cursor change ───────────────────────────────────────────────────
   useEffect(() => {
     if (!chartR.chart.current || !containerRef.current) return
     const w = containerRef.current.clientWidth
@@ -338,23 +349,30 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
     }
   }, [cursor, chartR])
 
-  // ── Trade markers ────────────────────────────────────────────────────────────
+  // ── Trade markers ─────────────────────────────────────────────────────────────
+  // v5: all addLineSeries() calls replaced with addSeries(LineSeries, opts)
   useEffect(() => {
     if (!chartR.chart.current || !bars.length) return
     const chart   = chartR.chart.current
     const markers = tradeMarkersRef.current
 
+    const mkTradeLine = (color) =>
+      chart.addSeries(LineSeries, {
+        color,
+        lineWidth: 1.5,
+        lineStyle: 2,  // dashed
+        lastValueVisible: true,
+        priceLineVisible: true,
+        priceLineColor: color,
+      })
+
     trades.forEach((trade) => {
-      const tid    = trade.id
-      const isOpen = trade.status === 'open'
+      const tid     = trade.id
+      const isOpen  = trade.status === 'open'
       const entryTime = msToSeconds(trade.openTime)
 
       if (!markers[tid] && isOpen) {
-        const mkLine = (color) => chart.addLineSeries({
-          color, lineWidth: 1.5, lineStyle: 2,
-          lastValueVisible: true, priceLineVisible: true, priceLineColor: color,
-        })
-        const entryLine = mkLine(C.amber)
+        const entryLine = mkTradeLine(C.amber)
         entryLine.setData([{ time: entryTime, value: trade.entry }])
         markers[tid] = { entry: entryLine, sl: null, tp: null }
       }
@@ -362,20 +380,24 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       if (markers[tid] && isOpen) {
         if (trade.sl) {
           if (!markers[tid].sl) {
-            const sl = chart.addLineSeries({ color: C.red, lineWidth: 1.5, lineStyle: 2, lastValueVisible: true, priceLineVisible: true, priceLineColor: C.red })
+            const sl = mkTradeLine(C.red)
             sl.setData([{ time: entryTime, value: trade.sl }])
             markers[tid].sl = sl
-          } else { try { markers[tid].sl.update({ time: entryTime, value: trade.sl }) } catch (_) {} }
+          } else {
+            try { markers[tid].sl.update({ time: entryTime, value: trade.sl }) } catch (_) {}
+          }
         } else if (markers[tid].sl) {
           try { chart.removeSeries(markers[tid].sl); markers[tid].sl = null } catch (_) {}
         }
 
         if (trade.tp) {
           if (!markers[tid].tp) {
-            const tp = chart.addLineSeries({ color: C.green, lineWidth: 1.5, lineStyle: 2, lastValueVisible: true, priceLineVisible: true, priceLineColor: C.blue })
+            const tp = mkTradeLine(C.green)
             tp.setData([{ time: entryTime, value: trade.tp }])
             markers[tid].tp = tp
-          } else { try { markers[tid].tp.update({ time: entryTime, value: trade.tp }) } catch (_) {} }
+          } else {
+            try { markers[tid].tp.update({ time: entryTime, value: trade.tp }) } catch (_) {}
+          }
         } else if (markers[tid].tp) {
           try { chart.removeSeries(markers[tid].tp); markers[tid].tp = null } catch (_) {}
         }

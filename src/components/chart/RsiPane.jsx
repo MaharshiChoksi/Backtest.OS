@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { createChart, CrosshairMode } from 'lightweight-charts'
+import { createChart, CrosshairMode, LineSeries } from 'lightweight-charts'
 import { useTheme, useThemeStore } from '../../store/useThemeStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
 import { chartUnixSeconds } from '../../utils/tradingUtils'
@@ -39,13 +39,13 @@ export function RsiPane({ rsiR, bars, times, rsiVals, mainChartRef }) {
       leftPriceScale: { visible: false },
     })
 
-    const rsiSeries = chart.addLineSeries({
+    const rsiSeries = chart.addSeries(LineSeries, {
       color: C.purple, lineWidth: 1, lastValueVisible: true, priceLineVisible: true,
     })
-    const ob = chart.addLineSeries({
+    const ob = chart.addSeries(LineSeries, {
       color: C.red + '60', lineWidth: 1, lastValueVisible: true, priceLineVisible: true, lineStyle: 2,
     })
-    const os = chart.addLineSeries({
+    const os = chart.addSeries(LineSeries, {
       color: C.green + '60', lineWidth: 1, lastValueVisible: true, priceLineVisible: true, lineStyle: 2,
     })
 

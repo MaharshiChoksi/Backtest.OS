@@ -5,6 +5,9 @@ import { calcRSI, calcBB, calcEMAs } from '../../utils/indicators'
 import { ChartPane } from './ChartPane'
 import { RsiPane } from './RsiPane'
 
+// No lightweight-charts API is called here — MultiChartPane is layout only.
+// All v5 migration changes are confined to ChartPane and RsiPane.
+
 const TF_LABEL = { '1m': 'M1', '5m': 'M5', '15m': 'M15', '30m': 'M30', '1h': 'H1', '4h': 'H4', '1d': 'D1' }
 
 export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
@@ -31,8 +34,8 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
     return result
   }, [selectedTimeframes, barsMap, emaPeriods, indic.bb, indic.rsi])
 
-  // chartId = the timeframe string — this is critical for per-chart DrawingManager isolation
-  const chart = (tf) => (
+  // chartId = the timeframe string — required for per-chart DrawingManager isolation
+  const renderChart = (tf) => (
     <ChartPane
       chartId={tf}
       chartR={chartRefs[tf]}
@@ -45,7 +48,7 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
     />
   )
 
-  const rsi = (tf) =>
+  const renderRsi = (tf) =>
     showRsi && rsiRefsMap[tf] ? (
       <RsiPane
         rsiR={rsiRefsMap[tf]}
@@ -57,7 +60,14 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
     ) : null
 
   const header = (tf, size = 14) => (
-    <div style={{ padding: '8px 14px', background: 'var(--surf)', borderBottom: '1px solid var(--border)', fontSize: size, fontWeight: 600, color: 'var(--text)' }}>
+    <div style={{
+      padding: '8px 14px',
+      background: 'var(--surf)',
+      borderBottom: '1px solid var(--border)',
+      fontSize: size,
+      fontWeight: 600,
+      color: 'var(--text)',
+    }}>
       {TF_LABEL[tf] || tf}
     </div>
   )
@@ -67,7 +77,7 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
     return (
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {header(tf)}{chart(tf)}{rsi(tf)}
+          {header(tf)}{renderChart(tf)}{renderRsi(tf)}
         </div>
       </div>
     )
@@ -78,10 +88,10 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
     return (
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div style={{ width: '50%', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
-          {header(tf1)}{chart(tf1)}{rsi(tf1)}
+          {header(tf1)}{renderChart(tf1)}{renderRsi(tf1)}
         </div>
         <div style={{ width: '50%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {header(tf2, 12)}{chart(tf2)}{rsi(tf2)}
+          {header(tf2, 12)}{renderChart(tf2)}{renderRsi(tf2)}
         </div>
       </div>
     )
@@ -91,14 +101,14 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       <div style={{ width: '50%', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
-        {header(tf1)}{chart(tf1)}{rsi(tf1)}
+        {header(tf1)}{renderChart(tf1)}{renderRsi(tf1)}
       </div>
       <div style={{ width: '50%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderBottom: '1px solid var(--border)', overflow: 'hidden' }}>
-          {header(tf2, 12)}{chart(tf2)}{rsi(tf2)}
+          {header(tf2, 12)}{renderChart(tf2)}{renderRsi(tf2)}
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {header(tf3, 12)}{chart(tf3)}{rsi(tf3)}
+          {header(tf3, 12)}{renderChart(tf3)}{renderRsi(tf3)}
         </div>
       </div>
     </div>

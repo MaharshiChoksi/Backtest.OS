@@ -13,7 +13,7 @@
     "dependencies": {
         "@vercel/analytics": "^2.0.1",
         "apache-arrow": "^15.0.2",
-        "lightweight-charts": "^4.2.1",
+        "lightweight-charts": "^5.0.0",
         "lightweight-charts-drawing": "^0.1.1",
         "papaparse": "^5.4.1",
         "react": "^19.0.0",
