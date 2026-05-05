@@ -3,7 +3,7 @@
 ## ❓What is This?
 
 Ever wanted to test your trading ideas on historical data without risking real money? That's exactly what this project does. It's a browser-based backtesting platform that lets you replay market data, simulate trades, and see exactly how your strategy would've performed.
-
+ 
 Think of it as a practice range for traders—load some historical price data, set up your trading rules, and watch how your trades would have played out over multi-timeframe.
 
 ---
@@ -79,53 +79,68 @@ This is built with modern web technologies that make it fast and responsive:
 ## 📂 Project Structure
 
 ```
-BackTest.OS/
+BackTestingEngine/
 ├── src/
+│   ├── App.jsx                    (Main app router)
+│   ├── main.jsx                   (React entry point)
 │   ├── components/
+│   │   ├── analysis/
+│   │   │   ├── AnalysisScreen.jsx  (Post-backtest analysis view)
+│   │   │   └── AnalysisSidebar.jsx (Analysis tools sidebar)
 │   │   ├── chart/
-│   │   │   ├── ChartPane.jsx          (Single chart renderer)
-│   │   │   ├── MultiChartPane.jsx     (1/2/3 chart layout + control)
-│   │   │   └── RsiPane.jsx            (RSI chart display)
+│   │   │   ├── ChartPane.jsx      (Single chart renderer)
+│   │   │   ├── MultiChartPane.jsx (1/2/3 chart layout + controls)
+│   │   │   └── RsiPane.jsx        (RSI chart display)
+│   │   ├── journal/
+│   │   │   └── JournalRoute.jsx   (Journal routing logic)
 │   │   ├── layout/
-│   │   │   ├── Workspace.jsx          (Main simulation container)
-│   │   │   ├── Header.jsx             (Account info + PnL display)
-│   │   │   └── SimBar.jsx             (Playback controls + progress)
+│   │   │   ├── Workspace.jsx       (Main simulation container)
+│   │   │   ├── Header.jsx         (Account info + PnL display)
+│   │   │   └── SimBar.jsx         (Playback controls + progress)
+│   │   ├── metrics/
+│   │   │   ├── MetricsTab.jsx      (Performance metrics display)
+│   │   │   └── RadarChart.jsx      (Radar chart for metrics)
 │   │   ├── sidebar/
-│   │   │   └── LeftSidebar.jsx        (Live position P&L)
+│   │   │   └── LeftSidebar.jsx     (Live position P&L + drawing tools)
 │   │   ├── trading/
-│   │   │   ├── TradeForm.jsx          (Entry/SL/TP input)
-│   │   │   ├── OpenPositionCard.jsx   (Active trade display)
-│   │   │   ├── JournalTab.jsx         (Trade journal table)
-│   │   │   └── RightPanel.jsx         (Trading panel container)
-│   │   ├── upload/
-│   │   │   └── UploadScreen.jsx       (Data loading + config)
-│   │   └── ui/
-│   │       └── atoms.jsx              (Reusable UI components)
-│   ├── hooks/
-│   │   └── useSimEngine.js            (Core simulation engine)
-│   ├── store/
-│   │   ├── useTradeStore.js           (Trade state + P&L calc)
-│   │   ├── useJournalStore.js         (Journal persistence)
-│   │   ├── useSimStore.js             (Simulation state)
-│   │   ├── useIndicatorStore.js       (Indicator toggles)
-│   │   └── useThemeStore.js           (Theme state)
-│   ├── utils/
-│   │   ├── parser.js                  (CSV/Parquet parsing + caching)
-│   │   ├── format.js                  (Date/number formatting)
-│   │   ├── indicators.js              (EMA, RSI, BB calculations)
-│   │   ├── tradingUtils.js            (Time conversion, bar aggregation)
-│   │   └── symbolUtils.js             (Symbol lookup + defaults)
+│   │   │   ├── TradeForm.jsx       (Entry/SL/TP input)
+│   │   │   ├── OpenPositionCard.jsx (Active trade display)
+│   │   │   ├── JournalTab.jsx      (Trade journal table)
+│   │   │   └── RightPanel.jsx      (Trading panel container)
+│   │   ├── ui/
+│   │   │   └── atoms.jsx           (Reusable UI components)
+│   │   └── upload/
+│   │       └── UploadScreen.jsx     (Data loading + configuration)
 │   ├── constants/
-│   │   └── index.js                   (App constants + colors)
-│   ├── App.jsx                        (Main app router)
-│   └── main.jsx                       (React entry point)
+│   │   └── index.js                (App constants + color schemes)
+│   ├── hooks/
+│   │   └── useSimEngine.js         (Core simulation engine)
+│   ├── store/
+│   │   ├── useTradeStore.js        (Trade state + P&L calculations)
+│   │   ├── useJournalStore.js      (Journal persistence)
+│   │   ├── useSimStore.js          (Simulation state)
+│   │   ├── useIndicatorStore.js    (Indicator configuration)
+│   │   ├── useThemeStore.js        (Theme state)
+│   │   └── useDrawingStore.js      (Drawing tools state)
+│   └── utils/
+│       ├── parser.js               (CSV/Parquet parsing + IndexedDB caching)
+│       ├── format.js               (Date/number formatting)
+│       ├── indicators.js           (EMA, RSI, Bollinger Bands calculations)
+│       ├── tradingUtils.js         (Time conversion, bar aggregation)
+│       ├── symbolUtils.js          (Symbol lookup + defaults)
+│       ├── journalImport.js        (Journal import/export utilities)
+│       └── metrics.js             (Performance metrics calculations)
 ├── public/
+│   ├── csvParserWorker.js         (Web Worker for CSV parsing)
 │   ├── data/
-│   │   └── AUDUSD_M1_*.csv            (Sample data)
-│   └── tickersconfig.json             (Symbol database)
-├── package.json
-├── vite.config.js
-└── README.md
+│   │   └── AUDUSD_M1_202001020000_202603272356.csv  (Sample 1-minute data)
+│   └── tickersconfig.json         (Symbol database)
+├── index.html                     (HTML entry point)
+├── .gitignore                     (Git Ignore file to ignore pushing certain files)
+├── package.json                   (Node.js dependencies)
+├── package-lock.json              (Dependency lock file)
+├── vite.config.js                 (Vite build configuration)
+└── README.md                      (Project documentation)
 ```
 
 ---
@@ -182,11 +197,12 @@ You need columns for: time (dates), open, high, low, close, and volume. That's i
 > [!NOTE]  
 > Here user can upload file with **date** and **time** columns seperately as well and our parser will auto detect it. 
 
+
 Example:
 ```
-date,time,open,high,low,close,volume
-2020-01-02 00:00:00,0.6630,0.6650,0.6625,0.6645,50000
-2020-01-02 01:00:00,0.6645,0.6660,0.6640,0.6655,45000
+date,       time,     open,   high,   low,    close,  tickvol,  vol,    spread
+2020-01-02, 00:00:00, 0.6630, 0.6650, 0.6625, 0.6645, 15000,    5000,   5
+2020-01-02, 01:00:00, 0.6645, 0.6660, 0.6640, 0.6655, 40050,    12000,  2
 ```
 
 ### Fair Warning on Large Datasets
@@ -224,6 +240,23 @@ I Recommend loading upto 1 million bars per chart.. It'll work, but don't go cra
 - **Edit Risk ($)**: Calculate new required SL automatically
 - **Update Fees**: Adjust commission on per-trade basis
 
+### Using Drawing Tools
+ 
+1. **Open the Tools tab** in the left sidebar
+2. **Select a tool** — it highlights to show it's active, and the "Active Tool" label updates
+3. **Click on the chart** to place anchor points:
+   - Single-anchor tools (Horizontal Line, Vertical Line): one click
+   - Two-anchor tools (Trend Line, Rectangle, Fib Retracement): two clicks
+   - Three-anchor tools (Andrews Pitchfork, Fib Extension): three clicks
+4. **A preview follows your cursor** between anchor placements so you can see what you're drawing
+5. **Press Escape** to cancel a drawing before it's complete
+6. **Click "Cursor"** in the General section to go back to normal chart navigation
+**Managing existing drawings**:
+- Switch to the **Drawings** tab in the left sidebar to see all placed drawings
+- Click any drawing in the list to select (and highlight) it on the chart
+- Click the × button next to a drawing to delete it
+- **Clear All** removes everything from all charts at once
+
 ### Journal Management
 
 The journal keeps records of every trade: entry time, price, size, P&L, whether you won or lost, and your running account balance. You can export it as a spreadsheet for deeper analysis. If you mess something up, hit Ctrl+Z to undo clearing entries.
@@ -235,8 +268,8 @@ The journal keeps records of every trade: entry time, price, size, P&L, whether 
 Down the road, I will be adding:
 - Session boxes (mark time zones and session ranges on your charts)
 - Support for backtesting multiple symbols at once
-- A performance dashboard with more detailed statistics
 - More built-in indicators (Swing High/Low, MACD, etc.)
+- May add Economic data indicator for the selected period.
 
 But honestly, the current version does what most traders need right now.
 
@@ -264,6 +297,7 @@ The app is built to be fast. The simulation engine runs every 16 milliseconds, w
 - 1 million bars (1M bars Recommended ~ Approx 1.5 years data @ 1Min TF)
 - Right now you're working with one symbol at a time
 - You have to pick all your timeframes upfront—you can't add a new one mid-backtest
+- Drawings are not persisted between sessions — they live in memory and reset on page reload
 
 ---
 
@@ -293,7 +327,18 @@ Everything stays on your machine. Your data never leaves your browser. We cache 
 
 ## Version History
 
-**V3.2** (Current)
+**V4.0** (Current)
+- **Multi Chart RSI**: Configure up to 3 RSI charts with custom periods
+- **68 Chart Drawing Tools**: Full suite of drawing tools powered by `lightweight-charts-drawing`
+  - Lines, Channels, Pitchforks, Fibonacci, Gann, Shapes, Annotations, Forecasting tools
+  - Rubber-band preview follows cursor between anchor placements
+  - Escape key cancels in-progress drawings
+  - Multi-timeframe support: each chart has its own independent drawing layer
+- **Tools Tab**: New tab in left sidebar to browse and select drawing tools by category
+- **Drawings Manager Tab**: New tab to view, select, and delete all placed drawings
+- **Per-chart DrawingManager isolation**: Fixed architecture so multi-chart mode doesn't cause charts to destroy each other's drawing state on mount/unmount
+
+**V3.2**
 - **Customizable Indicators**: Configure up to 3 EMA lines with custom periods and colors
 - **Indicator Configuration Step**: New step in upload flow to configure all indicators before backtest
 - **Bollinger Bands**: Configurable period and standard deviation
@@ -356,15 +401,6 @@ Everything stays on your machine. Your data never leaves your browser. We cache 
 - The original backtesting engine
 - Single chart support
 - Basic trade entry and P&L math
-
----
-
-## Future Ideas
-- Will Add more built-in indicators like Session Box, Swing High/Low, MACD, etc.
-- Create better performance reporting and analytics dashboards.
-- May add Economic data indicator for the selected period.
-
-Right now though, the foundation is solid and does everything a trader needs for standard backtesting.
 
 ---
 
