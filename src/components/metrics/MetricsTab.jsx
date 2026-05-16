@@ -5,7 +5,7 @@ import { useTradeStore } from '../../store/useTradeStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
 import { useJournalStore } from '../../store/useJournalStore'
 import { calculateMetrics, calculateWebSummary } from '../../utils/metrics'
-import { createChart, CrosshairMode } from 'lightweight-charts'
+import { createChart, CrosshairMode, LineSeries } from 'lightweight-charts'
 import { RadarChart } from './RadarChart'
 import { FONT } from '../../constants'
 import { fmt, fmtPnl, fmtShortDate } from '../../utils/format'
@@ -179,7 +179,7 @@ export function MetricsTab() {
       },
     })
 
-    const lineSeries = chart.addLineSeries({
+    const lineSeries = chart.addSeries(LineSeries, {
       color: C.green,
       lineWidth: 2,
       crosshairMarkerVisible: true,
