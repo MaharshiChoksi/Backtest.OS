@@ -29,7 +29,7 @@ let drawingIdCounter = 0
  *
  * @prop {string} [chartId='default']  Unique key per chart for the DrawingManager map.
  */
-export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, symbolConfig, chartId = 'default' }) {
+export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, symbolConfig, chartId = 'default', pdwlData }) {
   const containerRef = useRef(null)
   const lastSizeRef  = useRef({ width: 0, height: 0 })
   const resizeObserverRef = useRef(null)
@@ -134,6 +134,21 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       bLow = mkLine(C.blue + '55')
     }
 
+    // ── PDWL lines ──────────────────────────────────────────────────────────────
+    chartR.pdwl = {}
+    const pdwlDefs = [
+      ['pdHigh',  C.amber], ['pdLow',   C.amber],
+      ['pdOpen',  C.red],   ['pdClose', C.red],
+      ['pwHigh',  C.blue],  ['pwLow',   C.blue],
+      ['pwOpen',  C.purple],['pwClose', C.purple],
+    ]
+    const pdwlSeries = {}
+    pdwlDefs.forEach(([name, color]) => {
+      const s = mkLine(color)
+      pdwlSeries[name] = s
+      chartR.pdwl[name] = { current: s }
+    })
+
     // ── Seed initial data up to current cursor ──────────────────────────────────
     const slice      = bars.slice(0, cursor)
     const candleData = slice.map(b => ({ ...b, time: msToSeconds(b.time) }))
@@ -155,6 +170,31 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       bMid?.setData(buildLine(bbData.mid,   cursor, times))
       bUp?.setData(buildLine(bbData.upper,  cursor, times))
       bLow?.setData(buildLine(bbData.lower, cursor, times))
+    }
+
+    // Seed PDWL lines from prev day/week start to current bar
+    const seedIdx = cursor - 1
+    const seedTime = candleData[candleData.length - 1]?.time
+    if (pdwlData && seedTime && seedIdx >= 0) {
+      const pd = pdwlData
+      const seed = [
+        ['pdHigh', pd.pdHigh[seedIdx], pd.pdDayStart[seedIdx]],
+        ['pdLow', pd.pdLow[seedIdx], pd.pdDayStart[seedIdx]],
+        ['pdOpen', pd.pdOpen[seedIdx], pd.pdDayStart[seedIdx]],
+        ['pdClose', pd.pdClose[seedIdx], pd.pdDayStart[seedIdx]],
+        ['pwHigh', pd.pwHigh[seedIdx], pd.pwWeekStart[seedIdx]],
+        ['pwLow', pd.pwLow[seedIdx], pd.pwWeekStart[seedIdx]],
+        ['pwOpen', pd.pwOpen[seedIdx], pd.pwWeekStart[seedIdx]],
+        ['pwClose', pd.pwClose[seedIdx], pd.pwWeekStart[seedIdx]],
+      ]
+      seed.forEach(([name, v, start]) => {
+        if (v !== null && start !== null && pdwlSeries[name]) {
+          pdwlSeries[name].setData([
+            { time: msToSeconds(start), value: v },
+            { time: seedTime, value: v },
+          ])
+        }
+      })
     }
 
     chart.priceScale('right').applyOptions({ autoScale: true, mode: 0 })
@@ -198,9 +238,13 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       chart.remove()
       chartR.chart.current = chartR.candle.current = chartR.vol.current = null
       chartR.bbMid.current = chartR.bbUp.current   = chartR.bbLow.current = null
+      if (chartR.pdwl) {
+        Object.values(chartR.pdwl).forEach(ref => { ref.current = null })
+        chartR.pdwl = {}
+      }
       chartR.ema = {}
     }
-  }, [bars, symbolConfig, indic.ema.enabled, indic.bb.enabled]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bars, symbolConfig, indic.ema.enabled, indic.bb.enabled, pdwlData]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Drawing interaction loop ────────────────────────────────────────────────
   // The library has no built-in interactive mode. Every anchor must be collected

@@ -186,6 +186,44 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
         refs.bbLow.current?.update({ time: tb, value: data.bb.lower[idx] })
       }
     }
+
+    // PDWL levels — draw from prev day/week start to current bar
+    const pd = data.pdwl
+    if (ic.pdwl.enabled && pd && refs.pdwl) {
+      const t = chartUnixSeconds(barData.time)
+      if (t) {
+        const levels = [
+          ['pdHigh', pd.pdHigh, pd.pdDayStart, ic.pdwl.showPDHigh],
+          ['pdLow', pd.pdLow, pd.pdDayStart, ic.pdwl.showPDLow],
+          ['pdOpen', pd.pdOpen, pd.pdDayStart, ic.pdwl.showPDOpen],
+          ['pdClose', pd.pdClose, pd.pdDayStart, ic.pdwl.showPDClose],
+          ['pwHigh', pd.pwHigh, pd.pwWeekStart, ic.pdwl.showPWHigh],
+          ['pwLow', pd.pwLow, pd.pwWeekStart, ic.pdwl.showPWLow],
+          ['pwOpen', pd.pwOpen, pd.pwWeekStart, ic.pdwl.showPWOpen],
+          ['pwClose', pd.pwClose, pd.pwWeekStart, ic.pdwl.showPWClose],
+        ]
+        levels.forEach(([name, arr, startArr, show]) => {
+          const series = refs.pdwl[name]?.current
+          if (series) {
+            const v = arr?.[idx]
+            const s = startArr?.[idx]
+            if (v !== null && show && s != null) {
+              const startSec = chartUnixSeconds(s)
+              if (startSec) {
+                series.setData([
+                  { time: startSec, value: v },
+                  { time: t, value: v },
+                ])
+              }
+            } else {
+              series.setData([])
+            }
+          }
+        })
+      }
+    } else if (refs?.pdwl) {
+      Object.values(refs.pdwl).forEach(ref => ref?.current?.setData([]))
+    }
   }, [emaPeriods])
 
   // ── Chart update for a single bar (all timeframes) ──
@@ -332,6 +370,46 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
         primaryRefs.bbLow.current?.setData([])
       }
 
+      // PDWL levels at seek position — from prev day/week start to seek bar
+      const pdwlDataSeek = primaryData.pdwl
+      if (ic.pdwl.enabled && pdwlDataSeek && primaryRefs.pdwl) {
+        const lastCandle = candleData[candleData.length - 1]
+        const seekTime = lastCandle?.time
+        if (seekTime) {
+          const seekIdx = target - 1
+          const levels = [
+            ['pdHigh', pdwlDataSeek.pdHigh, pdwlDataSeek.pdDayStart, ic.pdwl.showPDHigh],
+            ['pdLow', pdwlDataSeek.pdLow, pdwlDataSeek.pdDayStart, ic.pdwl.showPDLow],
+            ['pdOpen', pdwlDataSeek.pdOpen, pdwlDataSeek.pdDayStart, ic.pdwl.showPDOpen],
+            ['pdClose', pdwlDataSeek.pdClose, pdwlDataSeek.pdDayStart, ic.pdwl.showPDClose],
+            ['pwHigh', pdwlDataSeek.pwHigh, pdwlDataSeek.pwWeekStart, ic.pdwl.showPWHigh],
+            ['pwLow', pdwlDataSeek.pwLow, pdwlDataSeek.pwWeekStart, ic.pdwl.showPWLow],
+            ['pwOpen', pdwlDataSeek.pwOpen, pdwlDataSeek.pwWeekStart, ic.pdwl.showPWOpen],
+            ['pwClose', pdwlDataSeek.pwClose, pdwlDataSeek.pwWeekStart, ic.pdwl.showPWClose],
+          ]
+          levels.forEach(([name, arr, startArr, show]) => {
+            const series = primaryRefs.pdwl[name]?.current
+            if (series) {
+              const v = arr?.[seekIdx]
+              const s = startArr?.[seekIdx]
+              if (v !== null && show && s != null) {
+                const startSec = chartUnixSeconds(s)
+                if (startSec) {
+                  series.setData([
+                    { time: startSec, value: v },
+                    { time: seekTime, value: v },
+                  ])
+                }
+              } else {
+                series.setData([])
+              }
+            }
+          })
+        }
+      } else if (primaryRefs?.pdwl) {
+        Object.values(primaryRefs.pdwl).forEach(ref => ref?.current?.setData([]))
+      }
+
       const pRsi = primaryData.rsi ?? rsiVals
       applyRsiPaneSlice(primaryRsiRefs, pRsi, primaryTimes, primaryBarsSeek, target, ic.rsi.enabled)
 
@@ -359,6 +437,7 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
             tfRefs.bbMid.current?.setData([])
             tfRefs.bbUp.current?.setData([])
             tfRefs.bbLow.current?.setData([])
+            if (tfRefs.pdwl) Object.values(tfRefs.pdwl).forEach(ref => ref?.current?.setData([]))
             clearRsiSeries(simChartData[tf]?.rsiR)
             return
           }
@@ -397,6 +476,45 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
             tfRefs.bbMid.current?.setData([])
             tfRefs.bbUp.current?.setData([])
             tfRefs.bbLow.current?.setData([])
+          }
+
+          // PDWL on other timeframe
+          const tfPdwl = tfData.pdwl
+          if (ic.pdwl.enabled && tfPdwl && tfRefs.pdwl) {
+            const tfLastCandle = tfCandleData[tfCandleData.length - 1]
+            const tfSeekTime = tfLastCandle?.time
+            if (tfSeekTime) {
+              const levels = [
+                ['pdHigh', tfPdwl.pdHigh, tfPdwl.pdDayStart, ic.pdwl.showPDHigh],
+                ['pdLow', tfPdwl.pdLow, tfPdwl.pdDayStart, ic.pdwl.showPDLow],
+                ['pdOpen', tfPdwl.pdOpen, tfPdwl.pdDayStart, ic.pdwl.showPDOpen],
+                ['pdClose', tfPdwl.pdClose, tfPdwl.pdDayStart, ic.pdwl.showPDClose],
+                ['pwHigh', tfPdwl.pwHigh, tfPdwl.pwWeekStart, ic.pdwl.showPWHigh],
+                ['pwLow', tfPdwl.pwLow, tfPdwl.pwWeekStart, ic.pdwl.showPWLow],
+                ['pwOpen', tfPdwl.pwOpen, tfPdwl.pwWeekStart, ic.pdwl.showPWOpen],
+                ['pwClose', tfPdwl.pwClose, tfPdwl.pwWeekStart, ic.pdwl.showPWClose],
+              ]
+              levels.forEach(([name, arr, startArr, show]) => {
+                const s = tfRefs.pdwl[name]?.current
+                if (s) {
+                  const v = arr?.[tfTarget]
+                  const st = startArr?.[tfTarget]
+                  if (v !== null && show && st != null) {
+                    const startSec = chartUnixSeconds(st)
+                    if (startSec) {
+                      s.setData([
+                        { time: startSec, value: v },
+                        { time: tfSeekTime, value: v },
+                      ])
+                    }
+                  } else {
+                    s.setData([])
+                  }
+                }
+              })
+            }
+          } else if (tfRefs?.pdwl) {
+            Object.values(tfRefs.pdwl).forEach(ref => ref?.current?.setData([]))
           }
 
           applyRsiPaneSlice(simChartData[tf]?.rsiR, tfData.rsi, tfData.times, tfData.bars, tfSliceLen, ic.rsi.enabled)

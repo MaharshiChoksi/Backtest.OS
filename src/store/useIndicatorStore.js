@@ -16,6 +16,17 @@ export const useIndicatorStore = create((set) => ({
     enabled: false,
     period: 14,
   },
+  pdwl: {
+    enabled: false,
+    showPDOpen: true,
+    showPDHigh: true,
+    showPDLow: true,
+    showPDClose: true,
+    showPWOpen: true,
+    showPWHigh: true,
+    showPWLow: true,
+    showPWClose: true,
+  },
 
   /** Toggle indicator on/off */
   toggleIndicator: (indicator) => set((s) => ({
@@ -37,10 +48,16 @@ export const useIndicatorStore = create((set) => ({
     rsi: { ...s.rsi, period: period ?? s.rsi.period }
   })),
 
+  /** Toggle a PDWL sub-level on/off */
+  setPdwlToggle: (name) => set((s) => ({
+    pdwl: { ...s.pdwl, [name]: !s.pdwl[name] }
+  })),
+
   /** Reset to defaults */
   resetIndicators: () => set({
     ema: { enabled: true, periods: [20, 50, 100], colors: ['#f59e0b', '#a855f7', '#3b82f6'] },
     bb: { enabled: false, period: 20, stdDev: 2 },
     rsi: { enabled: false, period: 14 },
+    pdwl: { enabled: false, showPDOpen: true, showPDHigh: true, showPDLow: true, showPDClose: true, showPWOpen: true, showPWHigh: true, showPWLow: true, showPWClose: true },
   }),
 }))

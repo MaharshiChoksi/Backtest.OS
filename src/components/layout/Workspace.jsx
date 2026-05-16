@@ -3,7 +3,7 @@ import { useTheme } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
 import { useTradeStore } from '../../store/useTradeStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
-import { calcEMA, calcRSI, calcBB } from '../../utils/indicators'
+import { calcEMA, calcRSI, calcBB, calcPDWL } from '../../utils/indicators'
 import { useSimEngine } from '../../hooks/useSimEngine'
 import { Header } from './Header'
 import { SimBar } from './SimBar'
@@ -99,6 +99,7 @@ export function Workspace({ onLoadNew }) {
           emaPeriods,
           bb: calcBB(closes, bbPeriod, bbStdDev),
           rsi: calcRSI(closes, rsiPeriod),
+          pdwl: calcPDWL(barData),
         }
       }
     }
@@ -118,6 +119,7 @@ export function Workspace({ onLoadNew }) {
         emaPeriods,
         bb: calcBB(closes, bbPeriod, bbStdDev),
         rsi: calcRSI(closes, rsiPeriod),
+        pdwl: calcPDWL(tfBars),
       }
     })
     return result
@@ -131,6 +133,7 @@ export function Workspace({ onLoadNew }) {
   const emaValues = allTimeframeData[primaryTF]?.ema || {}
   const bbData = allTimeframeData[primaryTF]?.bb || { mid: [], upper: [], lower: [] }
   const rsiVals = allTimeframeData[primaryTF]?.rsi || []
+  const pdwlData = allTimeframeData[primaryTF]?.pdwl || null
 
   // Build ema20v, ema50v etc for backward compatibility
   const ema20v = emaValues[20] || []
@@ -504,6 +507,7 @@ export function Workspace({ onLoadNew }) {
                 emaPeriods={emaPeriods}
                 bbData={bbData}
                 symbolConfig={symbolConfig}
+                pdwlData={pdwlData}
               />
             </div>
           )

@@ -422,6 +422,29 @@ function IndicTab({ emaValues, bbData, rsiVals, indic }) {
         <span style={{ fontSize: 12, color: indic.bb.enabled ? C.text : C.muted, fontFamily: FONT }}>Bollinger ({indic.bb.period}, {indic.bb.stdDev})</span>
       </div>
 
+      {/* PDWL toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 0', cursor: 'pointer', borderBottom: `1px solid ${C.border}22` }}
+        onClick={() => indic.toggleIndicator('pdwl')}
+      >
+        <div style={{ width: 12, height: 12, borderRadius: 2, background: indic.pdwl.enabled ? C.green : C.surf3, border: `1px solid ${indic.pdwl.enabled ? C.green : C.border2}`, flexShrink: 0, transition: 'all .15s' }} />
+        <div style={{ width: 18, height: 2, background: C.green, opacity: indic.pdwl.enabled ? 1 : 0.15, flexShrink: 0 }} />
+        <span style={{ fontSize: 12, color: indic.pdwl.enabled ? C.text : C.muted, fontFamily: FONT }}>PDWL</span>
+      </div>
+
+      {/* Sub-toggles for PDWL levels */}
+      {indic.pdwl.enabled && (
+        <div style={{ paddingLeft: 24, paddingTop: 4, paddingBottom: 8, borderBottom: `1px solid ${C.border}22` }}>
+          <LevelToggle label="PD Open"  active={indic.pdwl.showPDOpen}  color={C.red}    onClick={() => indic.setPdwlToggle('showPDOpen')} />
+          <LevelToggle label="PD High"  active={indic.pdwl.showPDHigh}  color={C.amber} onClick={() => indic.setPdwlToggle('showPDHigh')} />
+          <LevelToggle label="PD Low"   active={indic.pdwl.showPDLow}   color={C.amber} onClick={() => indic.setPdwlToggle('showPDLow')} />
+          <LevelToggle label="PD Close" active={indic.pdwl.showPDClose} color={C.red}    onClick={() => indic.setPdwlToggle('showPDClose')} />
+          <LevelToggle label="PW Open"  active={indic.pdwl.showPWOpen}  color={C.purple} onClick={() => indic.setPdwlToggle('showPWOpen')} />
+          <LevelToggle label="PW High"  active={indic.pdwl.showPWHigh}  color={C.blue}   onClick={() => indic.setPdwlToggle('showPWHigh')} />
+          <LevelToggle label="PW Low"   active={indic.pdwl.showPWLow}   color={C.blue}   onClick={() => indic.setPdwlToggle('showPWLow')} />
+          <LevelToggle label="PW Close" active={indic.pdwl.showPWClose} color={C.purple} onClick={() => indic.setPdwlToggle('showPWClose')} />
+        </div>
+      )}
+
       <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
       <SectionHeader>Sub-Pane</SectionHeader>
 
@@ -454,5 +477,23 @@ function IndicTab({ emaValues, bbData, rsiVals, indic }) {
         </>
       )}
     </>
+  )
+}
+
+function LevelToggle({ label, active, color, onClick }) {
+  const C = useTheme()
+  return (
+    <div
+      onClick={onClick}
+      style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '3px 0', cursor: 'pointer' }}
+    >
+      <div style={{
+        width: 10, height: 10, borderRadius: 2,
+        background: active ? color : C.surf3,
+        border: `1px solid ${active ? color : C.border2}`,
+        flexShrink: 0, transition: 'all .15s',
+      }} />
+      <span style={{ fontSize: 11, color: active ? C.text : C.muted, fontFamily: FONT }}>{label}</span>
+    </div>
   )
 }
