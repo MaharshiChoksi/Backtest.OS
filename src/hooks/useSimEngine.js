@@ -50,6 +50,31 @@ function applyRsiPaneSlice(rsiR, rsiVals, timesArr, allBars, endExclusiveIdx, rs
   rsiR.os.current?.setData(osPts)
 }
 
+function clearSlopeSeries(slopeR) {
+  const series = slopeR?.series?.current
+  if (series) Object.values(series).forEach(s => s?.setData([]))
+}
+
+function applySlopePaneSlice(slopeR, slopeData, timesArr, endExclusiveIdx, slopeEnabled) {
+  if (!slopeEnabled) {
+    clearSlopeSeries(slopeR)
+    return
+  }
+  const series = slopeR?.series?.current
+  if (!series || !slopeData || !timesArr?.length || endExclusiveIdx <= 0) {
+    clearSlopeSeries(slopeR)
+    return
+  }
+  Object.entries(series).forEach(([period, s]) => {
+    const values = slopeData[Number(period)]
+    if (values) {
+      s.setData(buildLine(values, endExclusiveIdx, timesArr))
+    } else {
+      s.setData([])
+    }
+  })
+}
+
 /**
  * Central simulation engine hook.
  *
@@ -59,7 +84,7 @@ function applyRsiPaneSlice(rsiR, rsiVals, timesArr, allBars, endExclusiveIdx, rs
  * - High-performance hot loop: refs-only state during playback
  * - Speed controls: 1x, 5x, 10x, 50x, MAX
  */
-export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, rsiR }) {
+export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, rsiR, slopeR }) {
   // chartR always comes from simChartData refs — never build a fake ref object here.
   // Calling useRef() conditionally inside an expression violates Rules of Hooks.
   // Workspace.jsx owns all refs; this hook just reads them.
@@ -246,11 +271,10 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
 
       // Update primary chart (or single chart)
       const primaryEntry = simChartData?.[primaryTF]
-      const primaryData = primaryEntry?.data ?? { ema: emaValues, bb: bbData, rsi: rsiVals }
+      const primaryData = primaryEntry?.data ?? { ema: emaValues, bb: bbData, rsi: rsiVals, slope: {} }
       const primaryRefs = primaryEntry?.refs ?? chartR
       const primaryRsiRefs = primaryEntry?.rsiR ?? rsiR
-
-      // console.log(`primaryRefs:`, primaryRefs, `primaryRefs.candle?.current:`, !!primaryRefs?.candle?.current)
+      const primarySlopeRefs = primaryEntry?.slopeR ?? slopeR
 
       updateSingleChart(primaryRefs, barForChart, idx, ic, primaryData)
 
@@ -261,6 +285,13 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
         primaryData.bars ?? bars,
         idx + 1,
         ic.rsi.enabled,
+      )
+      applySlopePaneSlice(
+        primarySlopeRefs,
+        primaryData.slope,
+        primaryData.times ?? times,
+        idx + 1,
+        ic.slope.enabled,
       )
 
       // ── Update other timeframes in multi-timeframe mode ──
@@ -299,6 +330,13 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
             tfData.bars,
             tfBarIdx + 1,
             ic.rsi.enabled,
+          )
+          applySlopePaneSlice(
+            simChartData[tf]?.slopeR,
+            tfData.slope,
+            tfData.times,
+            tfBarIdx + 1,
+            ic.slope.enabled,
           )
         })
       }
@@ -347,9 +385,10 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
       }))
 
       const primaryEntry = simChartData?.[primaryTF]
-      const primaryData = primaryEntry?.data ?? { ema: emaValues, bb: bbData, rsi: rsiVals, times, bars }
+      const primaryData = primaryEntry?.data ?? { ema: emaValues, bb: bbData, rsi: rsiVals, slope: {}, times, bars }
       const primaryRefs = primaryEntry?.refs ?? chartR
       const primaryRsiRefs = primaryEntry?.rsiR ?? rsiR
+      const primarySlopeRefs = primaryEntry?.slopeR ?? slopeR
 
       primaryRefs.candle.current?.setData(candleData)
       primaryRefs.vol.current?.setData(volData)
@@ -432,6 +471,7 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
 
       const pRsi = primaryData.rsi ?? rsiVals
       applyRsiPaneSlice(primaryRsiRefs, pRsi, primaryTimes, primaryBarsSeek, target, ic.rsi.enabled)
+      applySlopePaneSlice(primarySlopeRefs, primaryData.slope, primaryTimes, target, ic.slope.enabled)
 
       // ── Update other timeframes in multi-timeframe mode ──
       if (isMultiTimeframe && simChartData && targetTime) {
@@ -459,6 +499,7 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
             tfRefs.bbLow.current?.setData([])
             if (tfRefs.pdwl) Object.values(tfRefs.pdwl).forEach(ref => ref?.current?.setData([]))
             clearRsiSeries(simChartData[tf]?.rsiR)
+            clearSlopeSeries(simChartData[tf]?.slopeR)
             return
           }
 
@@ -548,10 +589,11 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
           }
 
           applyRsiPaneSlice(simChartData[tf]?.rsiR, tfData.rsi, tfData.times, tfData.bars, tfSliceLen, ic.rsi.enabled)
+          applySlopePaneSlice(simChartData[tf]?.slopeR, tfData.slope, tfData.times, tfSliceLen, ic.slope.enabled)
         })
       }
     },
-    [bars, times, chartR, rsiR, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, findCompletedBarIndex],
+    [bars, times, chartR, rsiR, slopeR, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, findCompletedBarIndex],
   )
 
   // ── HOT LOOP ─────────────────────────────────────────────

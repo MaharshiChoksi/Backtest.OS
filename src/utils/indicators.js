@@ -63,6 +63,57 @@ export function calcBB(vals, period = 20, stdDev = 2) {
 }
 
 /**
+ * Average True Range (ATR) — EMA of True Range
+ */
+export function calcATR(bars, period = 20) {
+  const n = bars.length
+  const out = new Array(n).fill(null)
+  if (n < 2) return out
+  const tr = new Array(n).fill(0)
+  tr[0] = bars[0].high - bars[0].low
+  for (let i = 1; i < n; i++) {
+    const h = bars[i].high
+    const l = bars[i].low
+    const pc = bars[i - 1].close
+    tr[i] = Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc))
+  }
+  const k = 2 / (period + 1)
+  let atr = null
+  for (let i = 0; i < n; i++) {
+    if (i < period - 1) continue
+    atr = atr === null
+      ? tr.slice(0, period).reduce((a, b) => a + b, 0) / period
+      : tr[i] * k + atr * (1 - k)
+    out[i] = +atr.toFixed(8)
+  }
+  return out
+}
+
+/**
+ * Normalized slope for multiple EMAs.
+ * Returns an object keyed by EMA period, with slope = (EMA[i] - EMA[i-1]) / ATR[i]
+ */
+export function calcNormalizedSlope(bars, emaPeriods, atrPeriod = 20) {
+  const closes = bars.map(b => b.close)
+  const emas = {}
+  emaPeriods.forEach(p => { emas[p] = calcEMA(closes, p) })
+  const atr = calcATR(bars, atrPeriod)
+  const n = bars.length
+  const result = {}
+  emaPeriods.forEach(p => {
+    const values = new Array(n).fill(null)
+    const ema = emas[p]
+    for (let i = 1; i < n; i++) {
+      if (ema[i] !== null && ema[i - 1] !== null && atr[i] !== null && atr[i] !== 0) {
+        values[i] = +((ema[i] - ema[i - 1]) / atr[i]).toFixed(8)
+      }
+    }
+    result[p] = values
+  })
+  return result
+}
+
+/**
  * Build a LightweightCharts series data array from a full indicator value array,
  * sliced to `idx` bars and paired with Unix timestamps (converted to seconds for TradingView).
  */

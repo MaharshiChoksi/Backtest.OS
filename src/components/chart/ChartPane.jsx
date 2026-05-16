@@ -247,8 +247,9 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       for (const entry of entries) {
         if (chartR.chart.current && entry.contentRect) {
           requestAnimationFrame(() => {
+            if (!chartR.chart.current) return
             const { width, height } = entry.contentRect
-            if (width > 0 && height > 0) chartR.chart.current?.resize(width, height)
+            if (width > 0 && height > 0) chartR.chart.current.resize(width, height)
           })
         }
       }

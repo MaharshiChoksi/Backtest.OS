@@ -27,6 +27,10 @@ export const useIndicatorStore = create((set) => ({
     showPWLow: true,
     showPWClose: false,
   },
+  slope: {
+    enabled: false,
+    atrPeriod: 20,
+  },
 
   /** Toggle indicator on/off */
   toggleIndicator: (indicator) => set((s) => ({
@@ -53,11 +57,17 @@ export const useIndicatorStore = create((set) => ({
     pdwl: { ...s.pdwl, [name]: !s.pdwl[name] }
   })),
 
+  /** Update Slope configuration */
+  setSlopeConfig: (config) => set((s) => ({
+    slope: { ...s.slope, ...config }
+  })),
+
   /** Reset to defaults */
   resetIndicators: () => set({
     ema: { enabled: true, periods: [20, 50, 100], colors: ['#f59e0b', '#a855f7', '#3b82f6'] },
     bb: { enabled: false, period: 20, stdDev: 2 },
     rsi: { enabled: false, period: 14 },
     pdwl: { enabled: false, showPDOpen: true, showPDHigh: true, showPDLow: true, showPDClose: true, showPWOpen: true, showPWHigh: true, showPWLow: true, showPWClose: true },
+    slope: { enabled: false, atrPeriod: 20 },
   }),
 }))

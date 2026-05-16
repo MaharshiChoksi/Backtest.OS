@@ -10,7 +10,7 @@ import { FONT } from '../../constants'
 import { fmt, fmtPnl, fmtShortDate } from '../../utils/format'
 import { TabBar, Kv, SectionHeader, Divider, pill } from '../ui/atoms'
 
-export function LeftSidebar({ ema20v, ema50v, bbData, rsiVals }) {
+export function LeftSidebar({ ema20v, ema50v, bbData, rsiVals, slopeData, slopeConfig }) {
   const C = useTheme()
   const [tab, setTab] = useState('info')
   const analysisMode = useSimStore((s) => s.analysisMode)
@@ -37,7 +37,7 @@ export function LeftSidebar({ ema20v, ema50v, bbData, rsiVals }) {
       <TabBar tabs={['info', 'indic', 'tools', 'drawings']} active={tab} onChange={setTab} />
       <div style={{ flex: 1, overflow: 'auto', padding: 14 }}>
         {tab === 'info' && <InfoTab />}
-        {tab === 'indic' && !analysisMode && <IndicTab emaValues={emaValues} bbData={bbData} rsiVals={rsiVals} indic={indic} />}
+        {tab === 'indic' && !analysisMode && <IndicTab emaValues={emaValues} bbData={bbData} rsiVals={rsiVals} indic={indic} slopeData={slopeData} slopeConfig={slopeConfig} />}
         {tab === 'tools' && <ToolsTab selectedTool={selectedTool} setSelectedTool={setSelectedTool} />}
         {tab === 'drawings' && (
           <DrawingsManagerTab
@@ -385,7 +385,7 @@ function InfoTab() {
 }
 
 // ── INDIC tab ─────────────────────────────────────────
-function IndicTab({ emaValues, bbData, rsiVals, indic }) {
+function IndicTab({ emaValues, bbData, rsiVals, indic, slopeData, slopeConfig }) {
   const C = useTheme()
   const cursor = useSimStore((s) => s.cursor)
   const bars = useSimStore((s) => s.bars)
@@ -445,6 +445,16 @@ function IndicTab({ emaValues, bbData, rsiVals, indic }) {
         </div>
       )}
 
+      {/* Slope toggle */}
+      <div
+        onClick={() => indic.toggleIndicator('slope')}
+        style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 0', cursor: 'pointer', borderBottom: `1px solid ${C.border}22` }}
+      >
+        <div style={{ width: 12, height: 12, borderRadius: 2, background: indic.slope.enabled ? C.green : C.surf3, border: `1px solid ${indic.slope.enabled ? C.green : C.border2}`, flexShrink: 0, transition: 'all .15s' }} />
+        <div style={{ width: 18, height: 2, background: C.green, opacity: indic.slope.enabled ? 1 : 0.15, flexShrink: 0 }} />
+        <span style={{ fontSize: 12, color: indic.slope.enabled ? C.text : C.muted, fontFamily: FONT }}>Normalized Slope ({indic.ema.periods.join(', ')})</span>
+      </div>
+
       <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
       <SectionHeader>Sub-Pane</SectionHeader>
 
@@ -457,7 +467,7 @@ function IndicTab({ emaValues, bbData, rsiVals, indic }) {
       </div>
 
       {/* Live values */}
-      {(indic.ema.enabled || indic.bb.enabled) && (
+      {(indic.ema.enabled || indic.bb.enabled || indic.slope.enabled) && (
         <>
           <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
           <SectionHeader>Live Values</SectionHeader>
@@ -474,6 +484,12 @@ function IndicTab({ emaValues, bbData, rsiVals, indic }) {
               <Kv label="BB Lower" value={fmt(bbData.lower[cursor - 1], dec)} color={C.blue} />
             </>
           )}
+          {indic.slope.enabled && slopeData && indic.ema.periods.map((period, idx) => {
+            const values = slopeData[period]
+            return values && values[cursor - 1] !== null ? (
+              <Kv key={`slp-${period}`} label={`Slope ${period}`} value={fmt(values[cursor - 1], 4)} color={indic.ema.colors[idx] || '#888'} />
+            ) : null
+          })}
         </>
       )}
     </>
