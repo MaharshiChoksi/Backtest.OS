@@ -18,14 +18,14 @@ export const useIndicatorStore = create((set) => ({
   },
   pdwl: {
     enabled: false,
-    showPDOpen: true,
+    showPDOpen: false,
     showPDHigh: true,
     showPDLow: true,
-    showPDClose: true,
-    showPWOpen: true,
+    showPDClose: false,
+    showPWOpen: false,
     showPWHigh: true,
     showPWLow: true,
-    showPWClose: true,
+    showPWClose: false,
   },
 
   /** Toggle indicator on/off */

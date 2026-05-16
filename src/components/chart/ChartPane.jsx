@@ -2,10 +2,11 @@ import { useEffect, useRef } from 'react'
 import {
   createChart,
   CrosshairMode,
-  CandlestickSeries,  // v5: imported directly, passed to chart.addSeries()
-  LineSeries,         // v5: replaces chart.addLineSeries()
-  HistogramSeries,    // v5: replaces chart.addHistogramSeries()
+  CandlestickSeries,
+  LineSeries,
+  HistogramSeries,
 } from 'lightweight-charts'
+import { TextLabelPrimitive } from '../../utils/textLabelPrimitive'
 import { getToolRegistry } from 'lightweight-charts-drawing'
 import { useTheme, useThemeStore } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
@@ -149,6 +150,23 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       chartR.pdwl[name] = { current: s }
     })
 
+    // TextLabelPrimitive — draw text labels at PDWL start positions
+    const labelPrimitive = new TextLabelPrimitive()
+    candle.attachPrimitive(labelPrimitive)
+    chartR.pdwlLabelPrimitive = {
+      current: labelPrimitive,
+      configs: {
+        pdHigh:  { text: 'PD High',  color: C.amber },
+        pdLow:   { text: 'PD Low',   color: C.amber },
+        pdOpen:  { text: 'PD Open',  color: C.red },
+        pdClose: { text: 'PD Close', color: C.red },
+        pwHigh:  { text: 'PW High',  color: C.blue },
+        pwLow:   { text: 'PW Low',   color: C.blue },
+        pwOpen:  { text: 'PW Open',  color: C.purple },
+        pwClose: { text: 'PW Close', color: C.purple },
+      },
+    }
+
     // ── Seed initial data up to current cursor ──────────────────────────────────
     const slice      = bars.slice(0, cursor)
     const candleData = slice.map(b => ({ ...b, time: msToSeconds(b.time) }))
@@ -187,14 +205,20 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
         ['pwOpen', pd.pwOpen[seedIdx], pd.pwWeekStart[seedIdx]],
         ['pwClose', pd.pwClose[seedIdx], pd.pwWeekStart[seedIdx]],
       ]
+      const seedLabels = []
       seed.forEach(([name, v, start]) => {
         if (v !== null && start !== null && pdwlSeries[name]) {
           pdwlSeries[name].setData([
             { time: msToSeconds(start), value: v },
             { time: seedTime, value: v },
           ])
+          const cfg = chartR.pdwlLabelPrimitive?.configs?.[name]
+          if (cfg) seedLabels.push({ time: msToSeconds(start), price: v, text: cfg.text, color: cfg.color })
         }
       })
+      if (seedLabels.length) {
+        chartR.pdwlLabelPrimitive?.current?.setLabels(seedLabels)
+      }
     }
 
     chart.priceScale('right').applyOptions({ autoScale: true, mode: 0 })
@@ -241,6 +265,11 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       if (chartR.pdwl) {
         Object.values(chartR.pdwl).forEach(ref => { ref.current = null })
         chartR.pdwl = {}
+      }
+      if (chartR.pdwlLabelPrimitive?.current) {
+        try { candle.detachPrimitive(chartR.pdwlLabelPrimitive.current) } catch (_) {}
+        chartR.pdwlLabelPrimitive.current = null
+        chartR.pdwlLabelPrimitive = null
       }
       chartR.ema = {}
     }

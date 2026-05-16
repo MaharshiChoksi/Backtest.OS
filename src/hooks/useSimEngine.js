@@ -202,6 +202,7 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
           ['pwOpen', pd.pwOpen, pd.pwWeekStart, ic.pdwl.showPWOpen],
           ['pwClose', pd.pwClose, pd.pwWeekStart, ic.pdwl.showPWClose],
         ]
+        const labelList = []
         levels.forEach(([name, arr, startArr, show]) => {
           const series = refs.pdwl[name]?.current
           if (series) {
@@ -214,15 +215,24 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
                   { time: startSec, value: v },
                   { time: t, value: v },
                 ])
+                const cfg = refs.pdwlLabelPrimitive?.configs?.[name]
+                if (cfg) labelList.push({ time: startSec, price: v, text: cfg.text, color: cfg.color })
               }
             } else {
               series.setData([])
             }
           }
         })
+        const lp = refs.pdwlLabelPrimitive?.current
+        if (lp) {
+          labelList.length ? lp.setLabels(labelList) : lp.clearLabels()
+        }
       }
     } else if (refs?.pdwl) {
       Object.values(refs.pdwl).forEach(ref => ref?.current?.setData([]))
+      if (refs.pdwlLabelPrimitive?.current) {
+        refs.pdwlLabelPrimitive.current.clearLabels()
+      }
     }
   }, [emaPeriods])
 
@@ -387,6 +397,7 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
             ['pwOpen', pdwlDataSeek.pwOpen, pdwlDataSeek.pwWeekStart, ic.pdwl.showPWOpen],
             ['pwClose', pdwlDataSeek.pwClose, pdwlDataSeek.pwWeekStart, ic.pdwl.showPWClose],
           ]
+          const seekLabels = []
           levels.forEach(([name, arr, startArr, show]) => {
             const series = primaryRefs.pdwl[name]?.current
             if (series) {
@@ -399,15 +410,24 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
                     { time: startSec, value: v },
                     { time: seekTime, value: v },
                   ])
+                  const cfg = primaryRefs.pdwlLabelPrimitive?.configs?.[name]
+                  if (cfg) seekLabels.push({ time: startSec, price: v, text: cfg.text, color: cfg.color })
                 }
               } else {
                 series.setData([])
               }
             }
           })
+          const lp = primaryRefs.pdwlLabelPrimitive?.current
+          if (lp) {
+            seekLabels.length ? lp.setLabels(seekLabels) : lp.clearLabels()
+          }
         }
       } else if (primaryRefs?.pdwl) {
         Object.values(primaryRefs.pdwl).forEach(ref => ref?.current?.setData([]))
+        if (primaryRefs.pdwlLabelPrimitive?.current) {
+          primaryRefs.pdwlLabelPrimitive.current.clearLabels()
+        }
       }
 
       const pRsi = primaryData.rsi ?? rsiVals
@@ -494,6 +514,7 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
                 ['pwOpen', tfPdwl.pwOpen, tfPdwl.pwWeekStart, ic.pdwl.showPWOpen],
                 ['pwClose', tfPdwl.pwClose, tfPdwl.pwWeekStart, ic.pdwl.showPWClose],
               ]
+              const tfLabels = []
               levels.forEach(([name, arr, startArr, show]) => {
                 const s = tfRefs.pdwl[name]?.current
                 if (s) {
@@ -506,15 +527,24 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
                         { time: startSec, value: v },
                         { time: tfSeekTime, value: v },
                       ])
+                      const cfg = tfRefs.pdwlLabelPrimitive?.configs?.[name]
+                      if (cfg) tfLabels.push({ time: startSec, price: v, text: cfg.text, color: cfg.color })
                     }
                   } else {
                     s.setData([])
                   }
                 }
               })
+              const lp = tfRefs.pdwlLabelPrimitive?.current
+              if (lp) {
+                tfLabels.length ? lp.setLabels(tfLabels) : lp.clearLabels()
+              }
             }
           } else if (tfRefs?.pdwl) {
             Object.values(tfRefs.pdwl).forEach(ref => ref?.current?.setData([]))
+            if (tfRefs.pdwlLabelPrimitive?.current) {
+              tfRefs.pdwlLabelPrimitive.current.clearLabels()
+            }
           }
 
           applyRsiPaneSlice(simChartData[tf]?.rsiR, tfData.rsi, tfData.times, tfData.bars, tfSliceLen, ic.rsi.enabled)
