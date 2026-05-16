@@ -9,6 +9,7 @@ export function SlopePane({ slopeR, bars, times, slopeData, mainChartRef }) {
   const C = useTheme()
   const dark = useThemeStore((s) => s.dark)
 
+  // ── Chart init ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current || !bars.length) return
 
@@ -29,9 +30,15 @@ export function SlopePane({ slopeR, bars, times, slopeData, mainChartRef }) {
       },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: C.border },
-      timeScale: { borderColor: C.border, timeVisible: true, secondsVisible: false, visible: false },
+      timeScale: {
+        borderColor: C.border,
+        timeVisible: true,
+        secondsVisible: false,
+        visible: false,
+      },
       leftPriceScale: { visible: false },
     })
+
     const series = {}
     periods.forEach((period, idx) => {
       const s = chart.addSeries(LineSeries, {
@@ -44,23 +51,39 @@ export function SlopePane({ slopeR, bars, times, slopeData, mainChartRef }) {
       series[period] = s
     })
 
-    chart.timeScale().fitContent()
-
     slopeR.chart.current = chart
     slopeR.series.current = series
 
-    // ── Sync time scales bidirectionally ──
-    const syncSlopeFromMain = (range) => {
-      if (range) chart.timeScale().setVisibleLogicalRange(range)
+    // ── Time-scale sync ─────────────────────────────────────────────────────────
+    // subscribeVisibleLogicalRangeChange fires for ALL scroll/zoom/pan events
+    // including empty space — reliable trigger.
+    // We use time ranges (via getVisibleRange) rather than logical indices because
+    // the slope chart has fewer data points (EMA warmup skips the first ~N bars).
+    // Initial sync is handled by seekTo after slope data is set.
+    let syncing = false
+
+    const syncSlopeFromMain = () => {
+      if (syncing) return
+      const range = mainChartRef.current?.timeScale().getVisibleRange()
+      if (!range) return
+      syncing = true
+      try { chart.timeScale().setVisibleRange(range) } catch (_) {}
+      syncing = false
     }
-    const syncMainFromSlope = (range) => {
-      if (range && mainChartRef.current) mainChartRef.current.timeScale().setVisibleLogicalRange(range)
+
+    const syncMainFromSlope = () => {
+      if (syncing || !mainChartRef.current) return
+      const range = chart.timeScale().getVisibleRange()
+      if (!range) return
+      syncing = true
+      try { mainChartRef.current.timeScale().setVisibleRange(range) } catch (_) {}
+      syncing = false
     }
 
     mainChartRef.current?.timeScale().subscribeVisibleLogicalRangeChange(syncSlopeFromMain)
     chart.timeScale().subscribeVisibleLogicalRangeChange(syncMainFromSlope)
 
-    // ── Sync crosshair movement ──
+    // ── Crosshair sync ──────────────────────────────────────────────────────────
     const handleMainCrosshairMove = (param) => {
       const firstSeries = Object.values(series)[0]
       if (!firstSeries) return
@@ -73,7 +96,7 @@ export function SlopePane({ slopeR, bars, times, slopeData, mainChartRef }) {
               ? chartUnixSeconds(raw.timestamp)
               : null
         if (time) {
-          chart.setCrosshairPosition({ price: 50, time }, firstSeries)
+          chart.setCrosshairPosition({ price: 0, time }, firstSeries)
         } else {
           chart.clearCrosshairPosition()
         }
@@ -94,7 +117,7 @@ export function SlopePane({ slopeR, bars, times, slopeData, mainChartRef }) {
     }
   }, [bars, mainChartRef, slopeR])
 
-  // Theme update
+  // ── Theme update ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!slopeR.chart.current) return
     slopeR.chart.current.applyOptions({
@@ -105,7 +128,18 @@ export function SlopePane({ slopeR, bars, times, slopeData, mainChartRef }) {
 
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
-      <span style={{ position: 'absolute', top: 4, left: 8, fontSize: 11, color: C.green, letterSpacing: '1px', zIndex: 10, pointerEvents: 'none' }}>
+      <span
+        style={{
+          position: 'absolute',
+          top: 4,
+          left: 8,
+          fontSize: 11,
+          color: C.green,
+          letterSpacing: '1px',
+          zIndex: 10,
+          pointerEvents: 'none',
+        }}
+      >
         Slope
       </span>
       <div ref={containerRef} style={{ height: 100 }} />

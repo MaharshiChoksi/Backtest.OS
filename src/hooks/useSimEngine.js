@@ -294,6 +294,15 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
         ic.slope.enabled,
       )
 
+      // Sync slope chart's range with main chart on first data set
+      if (ic.slope.enabled && primarySlopeRefs?.chart?.current) {
+        const mainApi = primaryRefs.chart.current
+        if (mainApi) {
+          const mr = mainApi.timeScale().getVisibleRange()
+          if (mr) try { primarySlopeRefs.chart.current.timeScale().setVisibleRange(mr) } catch (_) {}
+        }
+      }
+
       // ── Update other timeframes in multi-timeframe mode ──
       if (isMultiTimeframe && simChartData) {
         const currentTime = bar.time
@@ -472,6 +481,15 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
       const pRsi = primaryData.rsi ?? rsiVals
       applyRsiPaneSlice(primaryRsiRefs, pRsi, primaryTimes, primaryBarsSeek, target, ic.rsi.enabled)
       applySlopePaneSlice(primarySlopeRefs, primaryData.slope, primaryTimes, target, ic.slope.enabled)
+
+      // Sync slope chart's visible range with main chart (slope starts data-less)
+      if (ic.slope.enabled && primarySlopeRefs?.chart?.current) {
+        const mainApi = primaryRefs.chart.current
+        if (mainApi) {
+          const mr = mainApi.timeScale().getVisibleRange()
+          if (mr) try { primarySlopeRefs.chart.current.timeScale().setVisibleRange(mr) } catch (_) {}
+        }
+      }
 
       // ── Update other timeframes in multi-timeframe mode ──
       if (isMultiTimeframe && simChartData && targetTime) {
