@@ -306,12 +306,17 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
         ic.slope.enabled,
       )
 
-      // Sync slope chart to main chart's logical range after data is set
-      if (ic.slope.enabled && primarySlopeRefs?.chart?.current) {
+      // Sync indicator time scales to main chart
+      if (primaryRefs?.chart?.current) {
         const mainApi = primaryRefs.chart.current
-        if (mainApi) {
-          const lr = mainApi.timeScale().getVisibleLogicalRange()
-          if (lr) try { primarySlopeRefs.chart.current.timeScale().setVisibleLogicalRange(lr) } catch (_) {}
+        const lr = mainApi.timeScale().getVisibleLogicalRange()
+        if (lr) {
+          if (ic.rsi.enabled && primaryRsiRefs?.chart?.current) {
+            try { primaryRsiRefs.chart.current.timeScale().setVisibleLogicalRange(lr) } catch (_) {}
+          }
+          if (ic.slope.enabled && primarySlopeRefs?.chart?.current) {
+            try { primarySlopeRefs.chart.current.timeScale().setVisibleLogicalRange(lr) } catch (_) {}
+          }
         }
       }
 
@@ -359,10 +364,25 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
             tfBarIdx + 1,
             ic.slope.enabled,
           )
+
+          // Sync multi-TF indicator charts to their main chart
+          const tfRsiR = simChartData[tf]?.rsiR
+          const tfSlopeR = simChartData[tf]?.slopeR
+          if (tfRefs?.chart?.current) {
+            const tfLr = tfRefs.chart.current.timeScale().getVisibleLogicalRange()
+            if (tfLr) {
+              if (ic.rsi.enabled && tfRsiR?.chart?.current) {
+                try { tfRsiR.chart.current.timeScale().setVisibleLogicalRange(tfLr) } catch (_) {}
+              }
+              if (ic.slope.enabled && tfSlopeR?.chart?.current) {
+                try { tfSlopeR.chart.current.timeScale().setVisibleLogicalRange(tfLr) } catch (_) {}
+              }
+            }
+          }
         })
       }
     },
-    [chartR, rsiR, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, updateSingleChart, findCompletedBarIndex],
+    [chartR, rsiR, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, times, bars, updateSingleChart, findCompletedBarIndex],
   )
 
   // ── processBar — chart update + trade fill evaluation ─────
@@ -494,12 +514,17 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
       applyRsiPaneSlice(primaryRsiRefs, pRsi, primaryTimes, primaryBarsSeek, target, ic.rsi.enabled)
       applySlopePaneSlice(primarySlopeRefs, primaryData.slope, primaryTimes, target, ic.slope.enabled)
 
-      // Sync slope chart to main chart's logical range after data is set
-      if (ic.slope.enabled && primarySlopeRefs?.chart?.current) {
+      // Sync indicator chart time scales to main chart after data is set
+      if (primaryRefs?.chart?.current) {
         const mainApi = primaryRefs.chart.current
-        if (mainApi) {
-          const lr = mainApi.timeScale().getVisibleLogicalRange()
-          if (lr) try { primarySlopeRefs.chart.current.timeScale().setVisibleLogicalRange(lr) } catch (_) {}
+        const lr = mainApi.timeScale().getVisibleLogicalRange()
+        if (lr) {
+          if (ic.rsi.enabled && primaryRsiRefs?.chart?.current) {
+            try { primaryRsiRefs.chart.current.timeScale().setVisibleLogicalRange(lr) } catch (_) {}
+          }
+          if (ic.slope.enabled && primarySlopeRefs?.chart?.current) {
+            try { primarySlopeRefs.chart.current.timeScale().setVisibleLogicalRange(lr) } catch (_) {}
+          }
         }
       }
 
@@ -620,6 +645,21 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
 
           applyRsiPaneSlice(simChartData[tf]?.rsiR, tfData.rsi, tfData.times, tfData.bars, tfSliceLen, ic.rsi.enabled)
           applySlopePaneSlice(simChartData[tf]?.slopeR, tfData.slope, tfData.times, tfSliceLen, ic.slope.enabled)
+
+          // Sync multi-TF indicator charts to their main chart
+          const tfRsiR = simChartData[tf]?.rsiR
+          const tfSlopeR = simChartData[tf]?.slopeR
+          if (tfRefs?.chart?.current) {
+            const tfLr = tfRefs.chart.current.timeScale().getVisibleLogicalRange()
+            if (tfLr) {
+              if (ic.rsi.enabled && tfRsiR?.chart?.current) {
+                try { tfRsiR.chart.current.timeScale().setVisibleLogicalRange(tfLr) } catch (_) {}
+              }
+              if (ic.slope.enabled && tfSlopeR?.chart?.current) {
+                try { tfSlopeR.chart.current.timeScale().setVisibleLogicalRange(tfLr) } catch (_) {}
+              }
+            }
+          }
         })
       }
     },
