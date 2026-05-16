@@ -4,7 +4,7 @@ import { useTradeStore } from '../store/useTradeStore'
 import { useIndicatorStore } from '../store/useIndicatorStore'
 import { BASE_MS, getTimeframeMs } from '../constants'
 import { buildLine } from '../utils/indicators'
-import { chartUnixSeconds, msToSeconds } from '../utils/tradingUtils'
+import { chartUnixSeconds, msToSeconds, seriesTimeSeconds } from '../utils/tradingUtils'
 
 const G33 = '#36d47c33'
 const R33 = '#f0505033'
@@ -50,6 +50,43 @@ function applyRsiPaneSlice(rsiR, rsiVals, timesArr, allBars, endExclusiveIdx, rs
   rsiR.os.current?.setData(osPts)
 }
 
+function clearSlopeSeries(slopeR) {
+  const series = slopeR?.series?.current
+  if (series) Object.values(series).forEach(s => s?.setData([]))
+  slopeR?.anchor?.current?.setData([])
+}
+
+function applySlopePaneSlice(slopeR, slopeData, timesArr, endExclusiveIdx, slopeEnabled) {
+  if (!slopeEnabled) {
+    clearSlopeSeries(slopeR)
+    return
+  }
+  const series = slopeR?.series?.current
+  if (!series || !slopeData || !timesArr?.length || endExclusiveIdx <= 0) {
+    clearSlopeSeries(slopeR)
+    return
+  }
+  Object.entries(series).forEach(([period, s]) => {
+    const values = slopeData[Number(period)]
+    if (values) {
+      s.setData(buildLine(values, endExclusiveIdx, timesArr))
+    } else {
+      s.setData([])
+    }
+  })
+  // Anchor series — spans all bar times so logical ranges match main chart
+  const anchor = slopeR?.anchor?.current
+  if (anchor) {
+    const anchorData = []
+    const limit = Math.min(endExclusiveIdx, timesArr.length)
+    for (let i = 0; i < limit; i++) {
+      const t = seriesTimeSeconds(timesArr[i])
+      if (t != null) anchorData.push({ time: t, value: 0 })
+    }
+    anchor.setData(anchorData)
+  }
+}
+
 /**
  * Central simulation engine hook.
  *
@@ -59,7 +96,7 @@ function applyRsiPaneSlice(rsiR, rsiVals, timesArr, allBars, endExclusiveIdx, rs
  * - High-performance hot loop: refs-only state during playback
  * - Speed controls: 1x, 5x, 10x, 50x, MAX
  */
-export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, rsiR }) {
+export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, rsiR, slopeR }) {
   // chartR always comes from simChartData refs — never build a fake ref object here.
   // Calling useRef() conditionally inside an expression violates Rules of Hooks.
   // Workspace.jsx owns all refs; this hook just reads them.
@@ -246,11 +283,10 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
 
       // Update primary chart (or single chart)
       const primaryEntry = simChartData?.[primaryTF]
-      const primaryData = primaryEntry?.data ?? { ema: emaValues, bb: bbData, rsi: rsiVals }
+      const primaryData = primaryEntry?.data ?? { ema: emaValues, bb: bbData, rsi: rsiVals, slope: {} }
       const primaryRefs = primaryEntry?.refs ?? chartR
       const primaryRsiRefs = primaryEntry?.rsiR ?? rsiR
-
-      // console.log(`primaryRefs:`, primaryRefs, `primaryRefs.candle?.current:`, !!primaryRefs?.candle?.current)
+      const primarySlopeRefs = primaryEntry?.slopeR ?? slopeR
 
       updateSingleChart(primaryRefs, barForChart, idx, ic, primaryData)
 
@@ -262,6 +298,27 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
         idx + 1,
         ic.rsi.enabled,
       )
+      applySlopePaneSlice(
+        primarySlopeRefs,
+        primaryData.slope,
+        primaryData.times ?? times,
+        idx + 1,
+        ic.slope.enabled,
+      )
+
+      // Sync indicator time scales to main chart
+      if (primaryRefs?.chart?.current) {
+        const mainApi = primaryRefs.chart.current
+        const lr = mainApi.timeScale().getVisibleLogicalRange()
+        if (lr) {
+          if (ic.rsi.enabled && primaryRsiRefs?.chart?.current) {
+            try { primaryRsiRefs.chart.current.timeScale().setVisibleLogicalRange(lr) } catch (_) {}
+          }
+          if (ic.slope.enabled && primarySlopeRefs?.chart?.current) {
+            try { primarySlopeRefs.chart.current.timeScale().setVisibleLogicalRange(lr) } catch (_) {}
+          }
+        }
+      }
 
       // ── Update other timeframes in multi-timeframe mode ──
       if (isMultiTimeframe && simChartData) {
@@ -300,10 +357,32 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
             tfBarIdx + 1,
             ic.rsi.enabled,
           )
+          applySlopePaneSlice(
+            simChartData[tf]?.slopeR,
+            tfData.slope,
+            tfData.times,
+            tfBarIdx + 1,
+            ic.slope.enabled,
+          )
+
+          // Sync multi-TF indicator charts to their main chart
+          const tfRsiR = simChartData[tf]?.rsiR
+          const tfSlopeR = simChartData[tf]?.slopeR
+          if (tfRefs?.chart?.current) {
+            const tfLr = tfRefs.chart.current.timeScale().getVisibleLogicalRange()
+            if (tfLr) {
+              if (ic.rsi.enabled && tfRsiR?.chart?.current) {
+                try { tfRsiR.chart.current.timeScale().setVisibleLogicalRange(tfLr) } catch (_) {}
+              }
+              if (ic.slope.enabled && tfSlopeR?.chart?.current) {
+                try { tfSlopeR.chart.current.timeScale().setVisibleLogicalRange(tfLr) } catch (_) {}
+              }
+            }
+          }
         })
       }
     },
-    [chartR, rsiR, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, updateSingleChart, findCompletedBarIndex],
+    [chartR, rsiR, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, times, bars, updateSingleChart, findCompletedBarIndex],
   )
 
   // ── processBar — chart update + trade fill evaluation ─────
@@ -347,9 +426,10 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
       }))
 
       const primaryEntry = simChartData?.[primaryTF]
-      const primaryData = primaryEntry?.data ?? { ema: emaValues, bb: bbData, rsi: rsiVals, times, bars }
+      const primaryData = primaryEntry?.data ?? { ema: emaValues, bb: bbData, rsi: rsiVals, slope: {}, times, bars }
       const primaryRefs = primaryEntry?.refs ?? chartR
       const primaryRsiRefs = primaryEntry?.rsiR ?? rsiR
+      const primarySlopeRefs = primaryEntry?.slopeR ?? slopeR
 
       primaryRefs.candle.current?.setData(candleData)
       primaryRefs.vol.current?.setData(volData)
@@ -432,6 +512,21 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
 
       const pRsi = primaryData.rsi ?? rsiVals
       applyRsiPaneSlice(primaryRsiRefs, pRsi, primaryTimes, primaryBarsSeek, target, ic.rsi.enabled)
+      applySlopePaneSlice(primarySlopeRefs, primaryData.slope, primaryTimes, target, ic.slope.enabled)
+
+      // Sync indicator chart time scales to main chart after data is set
+      if (primaryRefs?.chart?.current) {
+        const mainApi = primaryRefs.chart.current
+        const lr = mainApi.timeScale().getVisibleLogicalRange()
+        if (lr) {
+          if (ic.rsi.enabled && primaryRsiRefs?.chart?.current) {
+            try { primaryRsiRefs.chart.current.timeScale().setVisibleLogicalRange(lr) } catch (_) {}
+          }
+          if (ic.slope.enabled && primarySlopeRefs?.chart?.current) {
+            try { primarySlopeRefs.chart.current.timeScale().setVisibleLogicalRange(lr) } catch (_) {}
+          }
+        }
+      }
 
       // ── Update other timeframes in multi-timeframe mode ──
       if (isMultiTimeframe && simChartData && targetTime) {
@@ -459,6 +554,7 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
             tfRefs.bbLow.current?.setData([])
             if (tfRefs.pdwl) Object.values(tfRefs.pdwl).forEach(ref => ref?.current?.setData([]))
             clearRsiSeries(simChartData[tf]?.rsiR)
+            clearSlopeSeries(simChartData[tf]?.slopeR)
             return
           }
 
@@ -548,10 +644,26 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
           }
 
           applyRsiPaneSlice(simChartData[tf]?.rsiR, tfData.rsi, tfData.times, tfData.bars, tfSliceLen, ic.rsi.enabled)
+          applySlopePaneSlice(simChartData[tf]?.slopeR, tfData.slope, tfData.times, tfSliceLen, ic.slope.enabled)
+
+          // Sync multi-TF indicator charts to their main chart
+          const tfRsiR = simChartData[tf]?.rsiR
+          const tfSlopeR = simChartData[tf]?.slopeR
+          if (tfRefs?.chart?.current) {
+            const tfLr = tfRefs.chart.current.timeScale().getVisibleLogicalRange()
+            if (tfLr) {
+              if (ic.rsi.enabled && tfRsiR?.chart?.current) {
+                try { tfRsiR.chart.current.timeScale().setVisibleLogicalRange(tfLr) } catch (_) {}
+              }
+              if (ic.slope.enabled && tfSlopeR?.chart?.current) {
+                try { tfSlopeR.chart.current.timeScale().setVisibleLogicalRange(tfLr) } catch (_) {}
+              }
+            }
+          }
         })
       }
     },
-    [bars, times, chartR, rsiR, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, findCompletedBarIndex],
+    [bars, times, chartR, rsiR, slopeR, emaValues, emaPeriods, bbData, rsiVals, isMultiTimeframe, simChartData, primaryTF, findCompletedBarIndex],
   )
 
   // ── HOT LOOP ─────────────────────────────────────────────

@@ -1,21 +1,23 @@
 import { useMemo } from 'react'
 import { useSimStore } from '../../store/useSimStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
-import { calcRSI, calcBB, calcEMAs, calcPDWL } from '../../utils/indicators'
+import { calcRSI, calcBB, calcEMAs, calcPDWL, calcNormalizedSlope } from '../../utils/indicators'
 import { ChartPane } from './ChartPane'
 import { RsiPane } from './RsiPane'
+import { SlopePane } from './SlopePane'
 
 // No lightweight-charts API is called here — MultiChartPane is layout only.
 // All v5 migration changes are confined to ChartPane and RsiPane.
 
 const TF_LABEL = { '1m': 'M1', '5m': 'M5', '15m': 'M15', '30m': 'M30', '1h': 'H1', '4h': 'H4', '1d': 'D1' }
 
-export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
+export function MultiChartPane({ chartRefs, rsiRefsMap, slopeRefsMap, showRsi, showSlope }) {
   const selectedTimeframes = useSimStore((s) => s.selectedTimeframes)
   const barsMap            = useSimStore((s) => s.barsMap)
   const symbolConfig       = useSimStore((s) => s.symbolConfig)
   const indic              = useIndicatorStore()
   const emaPeriods         = indic.ema.enabled ? indic.ema.periods : []
+  const slopeAtrPeriod     = indic.slope.atrPeriod || 20
 
   const indicByTF = useMemo(() => {
     const result = {}
@@ -30,10 +32,11 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
         bb:        calcBB(closes, indic.bb.period, indic.bb.stdDev),
         rsi:       calcRSI(closes, indic.rsi.period),
         pdwl:      calcPDWL(bars),
+        slope:     calcNormalizedSlope(bars, indic.ema.periods, slopeAtrPeriod),
       }
     })
     return result
-  }, [selectedTimeframes, barsMap, emaPeriods, indic.bb, indic.rsi])
+  }, [selectedTimeframes, barsMap, emaPeriods, indic.bb, indic.rsi, slopeAtrPeriod, indic.ema.periods])
 
   // chartId = the timeframe string — required for per-chart DrawingManager isolation
   const renderChart = (tf) => (
@@ -61,6 +64,17 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
       />
     ) : null
 
+  const renderSlope = (tf) =>
+    showSlope && slopeRefsMap[tf] ? (
+      <SlopePane
+        slopeR={slopeRefsMap[tf]}
+        bars={barsMap[tf] || []}
+        times={indicByTF[tf]?.times || []}
+        slopeData={indicByTF[tf]?.slope || {}}
+        mainChartRef={chartRefs[tf]?.chart}
+      />
+    ) : null
+
   const header = (tf, size = 14) => (
     <div style={{
       padding: '8px 14px',
@@ -79,7 +93,7 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
     return (
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {header(tf)}{renderChart(tf)}{renderRsi(tf)}
+          {header(tf)}{renderChart(tf)}{renderRsi(tf)}{renderSlope(tf)}
         </div>
       </div>
     )
@@ -90,10 +104,10 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
     return (
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div style={{ width: '50%', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
-          {header(tf1)}{renderChart(tf1)}{renderRsi(tf1)}
+          {header(tf1)}{renderChart(tf1)}{renderRsi(tf1)}{renderSlope(tf1)}
         </div>
         <div style={{ width: '50%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {header(tf2, 12)}{renderChart(tf2)}{renderRsi(tf2)}
+          {header(tf2, 12)}{renderChart(tf2)}{renderRsi(tf2)}{renderSlope(tf2)}
         </div>
       </div>
     )
@@ -103,14 +117,14 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       <div style={{ width: '50%', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
-        {header(tf1)}{renderChart(tf1)}{renderRsi(tf1)}
+        {header(tf1)}{renderChart(tf1)}{renderRsi(tf1)}{renderSlope(tf1)}
       </div>
       <div style={{ width: '50%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderBottom: '1px solid var(--border)', overflow: 'hidden' }}>
-          {header(tf2, 12)}{renderChart(tf2)}{renderRsi(tf2)}
+          {header(tf2, 12)}{renderChart(tf2)}{renderRsi(tf2)}{renderSlope(tf2)}
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {header(tf3, 12)}{renderChart(tf3)}{renderRsi(tf3)}
+          {header(tf3, 12)}{renderChart(tf3)}{renderRsi(tf3)}{renderSlope(tf3)}
         </div>
       </div>
     </div>

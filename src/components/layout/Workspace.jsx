@@ -3,7 +3,7 @@ import { useTheme } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
 import { useTradeStore } from '../../store/useTradeStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
-import { calcEMA, calcRSI, calcBB, calcPDWL } from '../../utils/indicators'
+import { calcEMA, calcRSI, calcBB, calcPDWL, calcNormalizedSlope } from '../../utils/indicators'
 import { useSimEngine } from '../../hooks/useSimEngine'
 import { Header } from './Header'
 import { SimBar } from './SimBar'
@@ -11,6 +11,7 @@ import { LeftSidebar } from '../sidebar/LeftSidebar'
 import { ChartPane } from '../chart/ChartPane'
 import { MultiChartPane } from '../chart/MultiChartPane'
 import { RsiPane } from '../chart/RsiPane'
+import { SlopePane } from '../chart/SlopePane'
 import { RightPanel } from '../trading/RightPanel'
 import { JournalTab } from '../trading/JournalTab'
 import { FONT } from '../../constants'
@@ -36,6 +37,7 @@ export function Workspace({ onLoadNew }) {
   const barsMap = useSimStore((s) => s.barsMap)
   const symbolConfig = useSimStore((s) => s.symbolConfig)
   const showRsi = useIndicatorStore((s) => s.rsi.enabled)
+  const showSlope = useIndicatorStore((s) => s.slope.enabled)
 
   const _rsiChart = useRef(null)
   const _rsiSeries = useRef(null)
@@ -66,6 +68,32 @@ export function Workspace({ onLoadNew }) {
   const _rsiSeries_m3 = useRef(null)
   const _rsiOb_m3 = useRef(null)
   const _rsiOs_m3 = useRef(null)
+
+  /** Slope refs */
+  const _slopeChart = useRef(null)
+  const _slopeSeries = useRef(null)
+  const _slopeAnchor = useRef(null)
+
+  const slopeRDefault = useMemo(
+    () => ({
+      chart: _slopeChart,
+      series: _slopeSeries,
+      anchor: _slopeAnchor,
+    }),
+    [],
+  )
+
+  /** Multi-chart Slope bundles */
+  const _slopeChart_m1 = useRef(null)
+  const _slopeSeries_m1 = useRef(null)
+  const _slopeAnchor_m1 = useRef(null)
+  const _slopeChart_m2 = useRef(null)
+  const _slopeSeries_m2 = useRef(null)
+  const _slopeAnchor_m2 = useRef(null)
+  const _slopeChart_m3 = useRef(null)
+  const _slopeSeries_m3 = useRef(null)
+  const _slopeAnchor_m3 = useRef(null)
+
   // Force re-render by subscribing to entire store (ensures mount/unmount works)
   const [, forceUpdate] = useState(0)
   useEffect(() => {
@@ -82,6 +110,7 @@ export function Workspace({ onLoadNew }) {
   const bbPeriod = indicatorConfig.bb.period
   const bbStdDev = indicatorConfig.bb.stdDev
   const rsiPeriod = indicatorConfig.rsi.period
+  const slopeConfig = indicatorConfig.slope
 
   // ── Pre-compute indicators for ALL timeframes in multi-timeframe mode ──
   const allTimeframeData = useMemo(() => {
@@ -100,6 +129,7 @@ export function Workspace({ onLoadNew }) {
           bb: calcBB(closes, bbPeriod, bbStdDev),
           rsi: calcRSI(closes, rsiPeriod),
           pdwl: calcPDWL(barData),
+          slope: calcNormalizedSlope(barData, emaPeriods, slopeConfig.atrPeriod),
         }
       }
     }
@@ -120,6 +150,7 @@ export function Workspace({ onLoadNew }) {
         bb: calcBB(closes, bbPeriod, bbStdDev),
         rsi: calcRSI(closes, rsiPeriod),
         pdwl: calcPDWL(tfBars),
+        slope: calcNormalizedSlope(tfBars, emaPeriods, slopeConfig.atrPeriod),
       }
     })
     return result
@@ -134,6 +165,7 @@ export function Workspace({ onLoadNew }) {
   const bbData = allTimeframeData[primaryTF]?.bb || { mid: [], upper: [], lower: [] }
   const rsiVals = allTimeframeData[primaryTF]?.rsi || []
   const pdwlData = allTimeframeData[primaryTF]?.pdwl || null
+  const slopeData = allTimeframeData[primaryTF]?.slope || {}
 
   // Build ema20v, ema50v etc for backward compatibility
   const ema20v = emaValues[20] || []
@@ -178,10 +210,10 @@ export function Workspace({ onLoadNew }) {
     const map = {}
     if (isMultiTimeframe && selectedTimeframes.length > 0) {
       // Map each selected timeframe to its ref set
-       const refSets = [
-         { chart: _chart1, candle: _candle1, vol: _vol1, ema: {}, bbMid: _bbMid1, bbUp: _bbUp1, bbLow: _bbLow1 },
-         { chart: _chart2, candle: _candle2, vol: _vol2, ema: {}, bbMid: _bbMid2, bbUp: _bbUp2, bbLow: _bbLow2 },
-         { chart: _chart3, candle: _candle3, vol: _vol3, ema: {}, bbMid: _bbMid3, bbUp: _bbUp3, bbLow: _bbLow3 },
+        const refSets = [
+          { chart: _chart1, candle: _candle1, vol: _vol1, ema: {}, bbMid: _bbMid1, bbUp: _bbUp1, bbLow: _bbLow1 },
+          { chart: _chart2, candle: _candle2, vol: _vol2, ema: {}, bbMid: _bbMid2, bbUp: _bbUp2, bbLow: _bbLow2 },
+          { chart: _chart3, candle: _candle3, vol: _vol3, ema: {}, bbMid: _bbMid3, bbUp: _bbUp3, bbLow: _bbLow3 },
        ]
       selectedTimeframes.forEach((tf, idx) => {
         if (idx < refSets.length) {
@@ -230,6 +262,26 @@ export function Workspace({ onLoadNew }) {
     return map
   }, [isMultiTimeframe, selectedTimeframes, rsiRDefault])
 
+  /** Slope refs per timeframe key (matches chartRefsMap keys) */
+  const slopeRefsMap = useMemo(() => {
+    const map = {}
+    const multiBundles = [
+      { chart: _slopeChart_m1, series: _slopeSeries_m1, anchor: _slopeAnchor_m1 },
+      { chart: _slopeChart_m2, series: _slopeSeries_m2, anchor: _slopeAnchor_m2 },
+      { chart: _slopeChart_m3, series: _slopeSeries_m3, anchor: _slopeAnchor_m3 },
+    ]
+    if (isMultiTimeframe && selectedTimeframes.length > 1) {
+      selectedTimeframes.forEach((tf, idx) => {
+        if (idx < multiBundles.length) map[tf] = multiBundles[idx]
+      })
+    } else if (isMultiTimeframe && selectedTimeframes.length === 1) {
+      map[selectedTimeframes[0]] = slopeRDefault
+    } else {
+      map.default = slopeRDefault
+    }
+    return map
+  }, [isMultiTimeframe, selectedTimeframes, slopeRDefault])
+
   // For simulation: collect all chart refs and data for multi-timeframe
   const simChartData = useMemo(() => {
     if (!isMultiTimeframe) {
@@ -238,6 +290,7 @@ export function Workspace({ onLoadNew }) {
           refs: chartRefsMap.default,
           data: allTimeframeData.default,
           rsiR: rsiRefsMap.default,
+          slopeR: slopeRefsMap.default,
         },
       }
     }
@@ -248,16 +301,22 @@ export function Workspace({ onLoadNew }) {
         refs: chartRefsMap[tf],
         data: allTimeframeData[tf],
         rsiR: rsiRefsMap[tf],
+        slopeR: slopeRefsMap[tf],
       }
     })
     return result
-  }, [isMultiTimeframe, selectedTimeframes, chartRefsMap, allTimeframeData, rsiRefsMap])
+  }, [isMultiTimeframe, selectedTimeframes, chartRefsMap, allTimeframeData, rsiRefsMap, slopeRefsMap])
 
   // ── Simulation engine ──────────────────────────────────────
   /** Bundle used by seek/step for RSI (primary driving timeframe) */
   const primaryRsiR = useMemo(() => {
     if (!isMultiTimeframe) return simChartData.default?.rsiR
     return simChartData[primaryTF]?.rsiR
+  }, [isMultiTimeframe, simChartData, primaryTF])
+
+  const primarySlopeR = useMemo(() => {
+    if (!isMultiTimeframe) return simChartData.default?.slopeR
+    return simChartData[primaryTF]?.slopeR
   }, [isMultiTimeframe, simChartData, primaryTF])
 
   const { seekTo, step, cursorRef } = useSimEngine({
@@ -271,6 +330,7 @@ export function Workspace({ onLoadNew }) {
     simChartData,
     primaryTF,
     rsiR: primaryRsiR,
+    slopeR: primarySlopeR,
   })
 
   // Initialize charts when workspace loads or bars change
@@ -295,6 +355,16 @@ export function Workspace({ onLoadNew }) {
     }
     prevShowRsiRef.current = showRsi
   }, [showRsi, seekTo])
+
+  // Slope pane mounts with empty series; after toggling slope on, repaint from engine.
+  const prevShowSlopeRef = useRef(showSlope)
+  useEffect(() => {
+    if (showSlope && !prevShowSlopeRef.current) {
+      const cur = useSimStore.getState().cursor
+      if (cur >= 1) queueMicrotask(() => seekTo(cur))
+    }
+    prevShowSlopeRef.current = showSlope
+  }, [showSlope, seekTo])
 
   const handleReset = () => {
     // Write to store directly — no reactive reads here, no stale closures
@@ -436,7 +506,7 @@ export function Workspace({ onLoadNew }) {
             overflow: 'auto',
             background: C.surf,
           }}>
-            <LeftSidebar emaValues={emaValues} bbData={bbData} rsiVals={rsiVals} />
+            <LeftSidebar emaValues={emaValues} bbData={bbData} rsiVals={rsiVals} slopeData={slopeData} slopeConfig={slopeConfig} />
           </div>
 
           {/* Right: Full-height Journal */}
@@ -484,7 +554,7 @@ export function Workspace({ onLoadNew }) {
       <Header onLoadNew={onLoadNew} />
 
       <div style={{ display: 'flex', flex: 1, minWidth: 0, overflow: 'hidden' }}>
-        <LeftSidebar emaValues={emaValues} bbData={bbData} rsiVals={rsiVals} />
+        <LeftSidebar emaValues={emaValues} bbData={bbData} rsiVals={rsiVals} slopeData={slopeData} slopeConfig={slopeConfig} />
 
         {/* Chart column */}
         <div style={{ display: 'flex', flex: 1, minWidth: 0, flexDirection: 'column', overflow: 'hidden', borderRight: `1px solid ${C.border}` }}>
@@ -492,7 +562,9 @@ export function Workspace({ onLoadNew }) {
             <MultiChartPane
               chartRefs={chartRefsMap}
               rsiRefsMap={rsiRefsMap}
+              slopeRefsMap={slopeRefsMap}
               showRsi={showRsi}
+              showSlope={showSlope}
             />
           ) : (
             <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -518,6 +590,15 @@ export function Workspace({ onLoadNew }) {
               bars={barData}
               times={times}
               rsiVals={rsiVals}
+              mainChartRef={chartRefsMap[primaryTF]?.chart}
+            />
+          )}
+          {showSlope && selectedTimeframes.length === 1 && (
+            <SlopePane
+              slopeR={slopeRDefault}
+              bars={barData}
+              times={times}
+              slopeData={slopeData}
               mainChartRef={chartRefsMap[primaryTF]?.chart}
             />
           )}
