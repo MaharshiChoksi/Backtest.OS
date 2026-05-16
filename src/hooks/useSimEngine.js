@@ -4,7 +4,7 @@ import { useTradeStore } from '../store/useTradeStore'
 import { useIndicatorStore } from '../store/useIndicatorStore'
 import { BASE_MS, getTimeframeMs } from '../constants'
 import { buildLine } from '../utils/indicators'
-import { chartUnixSeconds, msToSeconds } from '../utils/tradingUtils'
+import { chartUnixSeconds, msToSeconds, seriesTimeSeconds } from '../utils/tradingUtils'
 
 const G33 = '#36d47c33'
 const R33 = '#f0505033'
@@ -53,6 +53,7 @@ function applyRsiPaneSlice(rsiR, rsiVals, timesArr, allBars, endExclusiveIdx, rs
 function clearSlopeSeries(slopeR) {
   const series = slopeR?.series?.current
   if (series) Object.values(series).forEach(s => s?.setData([]))
+  slopeR?.anchor?.current?.setData([])
 }
 
 function applySlopePaneSlice(slopeR, slopeData, timesArr, endExclusiveIdx, slopeEnabled) {
@@ -73,6 +74,17 @@ function applySlopePaneSlice(slopeR, slopeData, timesArr, endExclusiveIdx, slope
       s.setData([])
     }
   })
+  // Anchor series — spans all bar times so logical ranges match main chart
+  const anchor = slopeR?.anchor?.current
+  if (anchor) {
+    const anchorData = []
+    const limit = Math.min(endExclusiveIdx, timesArr.length)
+    for (let i = 0; i < limit; i++) {
+      const t = seriesTimeSeconds(timesArr[i])
+      if (t != null) anchorData.push({ time: t, value: 0 })
+    }
+    anchor.setData(anchorData)
+  }
 }
 
 /**
@@ -294,12 +306,12 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
         ic.slope.enabled,
       )
 
-      // Sync slope chart's range with main chart on first data set
+      // Sync slope chart to main chart's logical range after data is set
       if (ic.slope.enabled && primarySlopeRefs?.chart?.current) {
         const mainApi = primaryRefs.chart.current
         if (mainApi) {
-          const mr = mainApi.timeScale().getVisibleRange()
-          if (mr) try { primarySlopeRefs.chart.current.timeScale().setVisibleRange(mr) } catch (_) {}
+          const lr = mainApi.timeScale().getVisibleLogicalRange()
+          if (lr) try { primarySlopeRefs.chart.current.timeScale().setVisibleLogicalRange(lr) } catch (_) {}
         }
       }
 
@@ -482,12 +494,12 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
       applyRsiPaneSlice(primaryRsiRefs, pRsi, primaryTimes, primaryBarsSeek, target, ic.rsi.enabled)
       applySlopePaneSlice(primarySlopeRefs, primaryData.slope, primaryTimes, target, ic.slope.enabled)
 
-      // Sync slope chart's visible range with main chart (slope starts data-less)
+      // Sync slope chart to main chart's logical range after data is set
       if (ic.slope.enabled && primarySlopeRefs?.chart?.current) {
         const mainApi = primaryRefs.chart.current
         if (mainApi) {
-          const mr = mainApi.timeScale().getVisibleRange()
-          if (mr) try { primarySlopeRefs.chart.current.timeScale().setVisibleRange(mr) } catch (_) {}
+          const lr = mainApi.timeScale().getVisibleLogicalRange()
+          if (lr) try { primarySlopeRefs.chart.current.timeScale().setVisibleLogicalRange(lr) } catch (_) {}
         }
       }
 

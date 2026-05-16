@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { createChart, CrosshairMode, LineSeries } from 'lightweight-charts'
 import { useTheme, useThemeStore } from '../../store/useThemeStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
-import { chartUnixSeconds } from '../../utils/tradingUtils'
+import { chartUnixSeconds, seriesTimeSeconds } from '../../utils/tradingUtils'
 
 export function SlopePane({ slopeR, bars, times, slopeData, mainChartRef }) {
   const containerRef = useRef(null)
@@ -51,33 +51,25 @@ export function SlopePane({ slopeR, bars, times, slopeData, mainChartRef }) {
       series[period] = s
     })
 
+    // Anchor series — invisible, spans all bar times so logical ranges match main chart
+    const anchor = chart.addSeries(LineSeries, {
+      color: 'transparent',
+      lineWidth: 0,
+      lastValueVisible: false,
+      priceLineVisible: false,
+    })
+    anchor.setData([])
+
     slopeR.chart.current = chart
     slopeR.series.current = series
+    slopeR.anchor.current = anchor
 
-    // ── Time-scale sync ─────────────────────────────────────────────────────────
-    // subscribeVisibleLogicalRangeChange fires for ALL scroll/zoom/pan events
-    // including empty space — reliable trigger.
-    // We use time ranges (via getVisibleRange) rather than logical indices because
-    // the slope chart has fewer data points (EMA warmup skips the first ~N bars).
-    // Initial sync is handled by seekTo after slope data is set.
-    let syncing = false
-
-    const syncSlopeFromMain = () => {
-      if (syncing) return
-      const range = mainChartRef.current?.timeScale().getVisibleRange()
-      if (!range) return
-      syncing = true
-      try { chart.timeScale().setVisibleRange(range) } catch (_) {}
-      syncing = false
+    // ── Time-scale sync (bidirectional logical range, same as RsiPane) ──────
+    const syncSlopeFromMain = (range) => {
+      if (range) chart.timeScale().setVisibleLogicalRange(range)
     }
-
-    const syncMainFromSlope = () => {
-      if (syncing || !mainChartRef.current) return
-      const range = chart.timeScale().getVisibleRange()
-      if (!range) return
-      syncing = true
-      try { mainChartRef.current.timeScale().setVisibleRange(range) } catch (_) {}
-      syncing = false
+    const syncMainFromSlope = (range) => {
+      if (range && mainChartRef.current) mainChartRef.current.timeScale().setVisibleLogicalRange(range)
     }
 
     mainChartRef.current?.timeScale().subscribeVisibleLogicalRangeChange(syncSlopeFromMain)
@@ -114,6 +106,7 @@ export function SlopePane({ slopeR, bars, times, slopeData, mainChartRef }) {
       chart.remove()
       slopeR.chart.current = null
       slopeR.series.current = null
+      slopeR.anchor.current = null
     }
   }, [bars, mainChartRef, slopeR])
 

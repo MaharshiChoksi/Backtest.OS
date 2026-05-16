@@ -72,11 +72,13 @@ export function Workspace({ onLoadNew }) {
   /** Slope refs */
   const _slopeChart = useRef(null)
   const _slopeSeries = useRef(null)
+  const _slopeAnchor = useRef(null)
 
   const slopeRDefault = useMemo(
     () => ({
       chart: _slopeChart,
       series: _slopeSeries,
+      anchor: _slopeAnchor,
     }),
     [],
   )
@@ -84,10 +86,13 @@ export function Workspace({ onLoadNew }) {
   /** Multi-chart Slope bundles */
   const _slopeChart_m1 = useRef(null)
   const _slopeSeries_m1 = useRef(null)
+  const _slopeAnchor_m1 = useRef(null)
   const _slopeChart_m2 = useRef(null)
   const _slopeSeries_m2 = useRef(null)
+  const _slopeAnchor_m2 = useRef(null)
   const _slopeChart_m3 = useRef(null)
   const _slopeSeries_m3 = useRef(null)
+  const _slopeAnchor_m3 = useRef(null)
 
   // Force re-render by subscribing to entire store (ensures mount/unmount works)
   const [, forceUpdate] = useState(0)
@@ -261,9 +266,9 @@ export function Workspace({ onLoadNew }) {
   const slopeRefsMap = useMemo(() => {
     const map = {}
     const multiBundles = [
-      { chart: _slopeChart_m1, series: _slopeSeries_m1 },
-      { chart: _slopeChart_m2, series: _slopeSeries_m2 },
-      { chart: _slopeChart_m3, series: _slopeSeries_m3 },
+      { chart: _slopeChart_m1, series: _slopeSeries_m1, anchor: _slopeAnchor_m1 },
+      { chart: _slopeChart_m2, series: _slopeSeries_m2, anchor: _slopeAnchor_m2 },
+      { chart: _slopeChart_m3, series: _slopeSeries_m3, anchor: _slopeAnchor_m3 },
     ]
     if (isMultiTimeframe && selectedTimeframes.length > 1) {
       selectedTimeframes.forEach((tf, idx) => {
