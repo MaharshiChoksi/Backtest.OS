@@ -1,4 +1,4 @@
-import { seriesTimeSeconds } from './tradingUtils'
+import { seriesTimeSeconds, aggregateBars } from './tradingUtils'
 
 export function calcEMA(vals, period) {
   const k   = 2 / (period + 1)
@@ -77,4 +77,70 @@ export function buildLine(vals, idx, times) {
     }
   }
   return result
+}
+
+/**
+ * Compute Previous Day & Week Levels (PDWL) for each bar index.
+ *
+ * Aggregates the bar array into daily/weekly OHLC and then for each bar
+ * determines the most recent completed day/week's OHLC values, plus the
+ * start time of that previous day/week (for drawing lines from that origin).
+ *
+ * @param {Array} bars - OHLCV bar array (bar.time in milliseconds)
+ * @returns {Object}
+ *   pdOpen|pdHigh|pdLow|pdClose|pwOpen|pwHigh|pwLow|pwClose — price arrays
+ *   pdDayStart|pwWeekStart — start timestamps (ms) of the previous day/week
+ */
+export function calcPDWL(bars) {
+  const n = bars.length
+  const DAY_MS = 86400000
+  const WEEK_MS = 7 * DAY_MS
+
+  const pdOpen     = new Array(n).fill(null)
+  const pdHigh     = new Array(n).fill(null)
+  const pdLow      = new Array(n).fill(null)
+  const pdClose    = new Array(n).fill(null)
+  const pdDayStart = new Array(n).fill(null)
+  const pwOpen     = new Array(n).fill(null)
+  const pwHigh     = new Array(n).fill(null)
+  const pwLow      = new Array(n).fill(null)
+  const pwClose    = new Array(n).fill(null)
+  const pwWeekStart = new Array(n).fill(null)
+
+  if (n === 0) return { pdOpen, pdHigh, pdLow, pdClose, pdDayStart, pwOpen, pwHigh, pwLow, pwClose, pwWeekStart }
+
+  const dailyBars  = aggregateBars(bars, 0, DAY_MS)
+  const weeklyBars = aggregateBars(bars, 0, WEEK_MS)
+
+  let dailyIdx = 0
+  for (let i = 0; i < n; i++) {
+    while (dailyIdx < dailyBars.length - 1 && dailyBars[dailyIdx + 1].time <= bars[i].time) {
+      dailyIdx++
+    }
+    if (dailyIdx > 0) {
+      const prev = dailyBars[dailyIdx - 1]
+      pdOpen[i]     = prev.open
+      pdHigh[i]     = prev.high
+      pdLow[i]      = prev.low
+      pdClose[i]    = prev.close
+      pdDayStart[i] = prev.time
+    }
+  }
+
+  let weeklyIdx = 0
+  for (let i = 0; i < n; i++) {
+    while (weeklyIdx < weeklyBars.length - 1 && weeklyBars[weeklyIdx + 1].time <= bars[i].time) {
+      weeklyIdx++
+    }
+    if (weeklyIdx > 0) {
+      const prev = weeklyBars[weeklyIdx - 1]
+      pwOpen[i]      = prev.open
+      pwHigh[i]      = prev.high
+      pwLow[i]       = prev.low
+      pwClose[i]     = prev.close
+      pwWeekStart[i] = prev.time
+    }
+  }
+
+  return { pdOpen, pdHigh, pdLow, pdClose, pdDayStart, pwOpen, pwHigh, pwLow, pwClose, pwWeekStart }
 }

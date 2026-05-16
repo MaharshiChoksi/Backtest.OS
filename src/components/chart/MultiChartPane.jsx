@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useSimStore } from '../../store/useSimStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
-import { calcRSI, calcBB, calcEMAs } from '../../utils/indicators'
+import { calcRSI, calcBB, calcEMAs, calcPDWL } from '../../utils/indicators'
 import { ChartPane } from './ChartPane'
 import { RsiPane } from './RsiPane'
 
@@ -29,6 +29,7 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
         emaPeriods,
         bb:        calcBB(closes, indic.bb.period, indic.bb.stdDev),
         rsi:       calcRSI(closes, indic.rsi.period),
+        pdwl:      calcPDWL(bars),
       }
     })
     return result
@@ -45,6 +46,7 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, showRsi }) {
       emaPeriods={emaPeriods}
       bbData={indicByTF[tf]?.bb || { mid: [], upper: [], lower: [] }}
       symbolConfig={symbolConfig}
+      pdwlData={indicByTF[tf]?.pdwl || null}
     />
   )
 
