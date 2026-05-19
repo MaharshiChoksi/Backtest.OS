@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useTheme }      from '../../store/useThemeStore'
 import { useSimStore }   from '../../store/useSimStore'
 import { useTradeStore } from '../../store/useTradeStore'
+import { useJournalStore } from '../../store/useJournalStore'
 import { getDecimalPlaces, validateMarginForTrade } from '../../utils/tradingUtils'
 import { FONT }          from '../../constants'
 import { fmt } from '../../utils/format'
@@ -15,6 +16,7 @@ export function TradeForm() {
   const accountConfig = useSimStore((s) => s.accountConfig)
   const openTrade  = useTradeStore((s) => s.openTrade)
   const trades     = useTradeStore((s) => s.trades)
+  const journalEntries = useJournalStore((s) => s.entries)
 
   const currentBar = bars[cursor - 1]
   
@@ -55,9 +57,15 @@ export function TradeForm() {
   // Validate margin for the proposed trade
   const marginValidation = useMemo(() => {
     const tradeSize = parseFloat(size) || 0
-    
+    // Derive a current account balance from journal entries (starting + deposits - withdrawals + closed PnL)
+    const starting = accountConfig?.starting_balance || 0
+    const deposits = journalEntries.length > 0 ? (journalEntries[0].deposits || 0) : 0
+    const withdrawals = journalEntries.length > 0 ? (journalEntries[0].withdrawals || 0) : 0
+    const cumulativeClosedPnL = journalEntries.filter(e => e.exitPrice).reduce((sum, e) => sum + (e.pnlUsd || 0), 0)
+    const currentBalance = starting + deposits - withdrawals + cumulativeClosedPnL
+
     return validateMarginForTrade({
-      accountBalance: accountConfig?.starting_balance || 0,
+      accountBalance: currentBalance,
       openTrades: openTrades,
       positions: {
         lotSize: tradeSize,
@@ -66,7 +74,7 @@ export function TradeForm() {
       leverage: accountConfig?.leverage || 100,
       symbolConfig: symbolConfig,
     })
-  }, [size, entryPrice, currentBar, accountConfig, openTrades, symbolConfig])
+  }, [size, entryPrice, currentBar, accountConfig, openTrades, symbolConfig, journalEntries])
 
   const canOpenTrade = currentBar && entryPrice && marginValidation.valid
 
