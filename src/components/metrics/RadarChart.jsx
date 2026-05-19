@@ -26,21 +26,21 @@ export function RadarChart({ metrics, width = 450, height = 450 }) {
       },
       {
         name: 'Risk %',
-        value: Math.min(parseFloat(metrics.avgRiskPercent) / 5, 1), // Normalize assuming max 5%
+        value: Math.min((parseFloat(metrics.avgRiskPercent) || 0) / 5, 1), // Normalize assuming max 5%
         max: 5,
-        formatted: `${metrics.avgRiskPercent}%`
+        formatted: `${metrics.avgRiskPercent ?? 0}%`
       },
       {
         name: 'Profit Factor',
-        value: Math.min(parseFloat(metrics.profitFactor) / 2, 1), // Normalize assuming max 2
+        value: Math.min((parseFloat(metrics.profitFactor) || 0) / 2, 1), // Normalize assuming max 2
         max: 2,
-        formatted: `${metrics.profitFactor}`
+        formatted: `${metrics.profitFactor ?? 0}`
       },
       {
         name: 'Sharpe Ratio',
-        value: Math.min(parseFloat(metrics.sharpeRatio) / 2, 1), // Normalize assuming max 2
+        value: Math.min((parseFloat(metrics.sharpeRatio) || 0) / 2, 1), // Normalize assuming max 2
         max: 2,
-        formatted: `${metrics.sharpeRatio}`
+        formatted: `${metrics.sharpeRatio ?? 0}`
       },
       {
         name: 'Recovery Factor',
