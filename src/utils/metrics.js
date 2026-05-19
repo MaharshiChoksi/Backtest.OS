@@ -217,8 +217,10 @@ export function calculateMetrics(trades, accountConfig, startDate = null, endDat
   // Average Risk Percent
   if (filteredTrades.length > 0) {
     const totalRisk = filteredTrades.reduce((sum, t) => {
-      const riskPercent = t.riskPercent || 0
-      return sum + riskPercent
+      const riskPercent = typeof t.riskPercent === 'number'
+        ? t.riskPercent
+        : (t.risk && t.balance ? (t.risk / t.balance) * 100 : 0)
+      return sum + (Number.isFinite(riskPercent) ? riskPercent : 0)
     }, 0)
     metrics.avgRiskPercent = (totalRisk / filteredTrades.length).toFixed(2)
   }
