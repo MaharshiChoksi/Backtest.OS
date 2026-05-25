@@ -197,15 +197,14 @@ export function calculateMetrics(trades, accountConfig, startDate = null, endDat
     }
   })
 
-  // Sharpe Ratio (simplified - using daily returns)
-  const dailyReturns = Object.values(dailyPnl)
+  // Sharpe Ratio (simplified - using daily returns amounts)
+  const dailyReturns = Object.values(dailyPnl).map(d => Number(d.amount) || 0)
   if (dailyReturns.length > 1) {
     const avgReturn = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
-    const stdDev = Math.sqrt(
-      dailyReturns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / dailyReturns.length
-    )
+    const variance = dailyReturns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / dailyReturns.length
+    const stdDev = Math.sqrt(variance)
     if (stdDev > 0) {
-      metrics.sharpeRatio = (avgReturn / stdDev * Math.sqrt(252)).toFixed(2) // Annualized
+      metrics.sharpeRatio = Number(((avgReturn / stdDev) * Math.sqrt(252)).toFixed(2)) // Annualized
     }
   }
 
@@ -214,15 +213,21 @@ export function calculateMetrics(trades, accountConfig, startDate = null, endDat
     metrics.profitFactor = (metrics.grossProfit / metrics.grossLoss).toFixed(2)
   }
 
-  // Average Risk Percent
+  // Average Risk Percent (robust parsing of riskPercent and fallback to risk/balance)
   if (filteredTrades.length > 0) {
     const totalRisk = filteredTrades.reduce((sum, t) => {
-      const riskPercent = typeof t.riskPercent === 'number'
-        ? t.riskPercent
-        : (t.risk && t.balance ? (t.risk / t.balance) * 100 : 0)
-      return sum + (Number.isFinite(riskPercent) ? riskPercent : 0)
+      let rp = 0
+      if (t.riskPercent !== undefined && t.riskPercent !== null) {
+        const n = Number(t.riskPercent)
+        rp = Number.isFinite(n) ? n : 0
+      } else if (t.risk !== undefined && t.risk !== null) {
+        const riskVal = Number(t.risk)
+        const balVal = Number(t.balance ?? accountConfig?.starting_balance ?? 0)
+        rp = balVal > 0 && Number.isFinite(riskVal) ? (riskVal / balVal) * 100 : 0
+      }
+      return sum + rp
     }, 0)
-    metrics.avgRiskPercent = (totalRisk / filteredTrades.length).toFixed(2)
+    metrics.avgRiskPercent = Number((totalRisk / filteredTrades.length).toFixed(2))
   }
 
   // Average Trade Duration

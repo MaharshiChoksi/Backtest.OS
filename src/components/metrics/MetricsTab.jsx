@@ -124,6 +124,10 @@ export function MetricsTab() {
         pnlPips: entry.pnlPips || 0,
         fees: entry.fees || 0,
         status: entry.exitPrice ? 'closed' : 'open',
+        // include risk/balance so metrics can compute risk percent
+        balance: entry.balance || null,
+        risk: entry.risk || null,
+        riskPercent: (entry.risk && entry.balance) ? ((Number(entry.risk) / Number(entry.balance)) * 100) : (entry.riskPercent ?? null),
       }
     })
   }, [filteredJournalEntries])
