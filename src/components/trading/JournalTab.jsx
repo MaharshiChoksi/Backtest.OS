@@ -12,9 +12,40 @@ import { SectionHeader } from '../ui/atoms'
 const ACCOUNTS = ['5%ers - 2.5K', 'ICMkt Real', 'ICMkt Demo', 'BackTest', 'ForwardTest', 'StressTest']
 const SESSION_OPTIONS = ['LONDON', 'NEWYORK', 'TOKYO', 'SYDNEY']
 const REGIME_OPTIONS = ['BULLCONT', 'BULLREV', 'BEARCONT', 'BEARREV', 'NOISE']
-const STRATEGY_OPTIONS = ['INDICES-SETUP-A-REVERSAL', 'INDICES-SETUP-B-CONTINUATION', 'COMMODITY-AMDX', 'CURRENCY-REGIME & TREND CONTINUATION']
+const STRATEGY_OPTIONS = [
+  'INDICES-SETUP-A-REVERSAL',
+  'INDICES-SETUP-B-CONTINUATION',
+  'COMMODITY-AMDX',
+  'HTF ZONE RETEST - CONTINUATION',
+  'CHoCH REVERSAL RETEST- REVERSAL',
+  'NO SETUP',
+]
 const TF_OPTIONS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
 const SYMBOLS = ["EURUSD", "USDJPY", "GBPUSD", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD", "EURGBP", "EURJPY", "AUDCHF", "XAUUSD", "XAGUSD", "BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD", "DOGEUSD", "XTIUSD", "SP500 / US500 / SPX500", "USTECH / US100 / NASDAQ", "US30 / DJI30 / DOW"]
+const CONFLUENCE_OPTIONS = [
+  'HTF ZONE - Levels defined',
+  'HH-HL / LH-LL Intact - continuation',
+  'CHoCH Confirmed - reversal',
+  'Level Flipped - reversal',
+  '20/50 Crossed - in trade direction after retest',
+  'Price > 200 EMA / Price < 200 EMA',
+  '20/50 > 200 EMA / 20/50 < 200 EMA',
+  '200 EMA Turning - reversal',
+  'Bodies Shrinking - momentum loss on retest',
+  'Volume Declining - volume decays',
+  'Entry Candle - strong body or wick confirming direction',
+]
+
+const formatMultiValues = (value) => {
+  if (Array.isArray(value)) return value.join(', ')
+  if (typeof value === 'string' && value.trim().length > 0) return value
+  return '—'
+}
+
+const formatConfluenceScore = (entry) => {
+  const count = Array.isArray(entry.confluences) ? entry.confluences.filter(Boolean).length : 0
+  return `${count}/${CONFLUENCE_OPTIONS.length}`
+}
 
 export function JournalTab() {
   const C = useTheme()
@@ -228,6 +259,8 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
     { key: 'strategyType', label: 'STRATEGY TYPE', width: 120, editable: true, type: 'dropdown', options: STRATEGY_OPTIONS },
     { key: 'analysisTf', label: 'ANALYSIS TF', width: 100, editable: true, type: 'dropdown', options: TF_OPTIONS },
     { key: 'entryTf', label: 'ENTRY TF', width: 100, editable: true, type: 'dropdown', options: TF_OPTIONS },
+    { key: 'confluences', label: 'CONFLUENCES', width: 250, editable: true, type: 'multiselect', options: CONFLUENCE_OPTIONS },
+    { key: 'confluenceScore', label: 'CONFLUENCE SCORE', width: 120, editable: false, format: (_, entry) => formatConfluenceScore(entry) },
 
     // Position Management
     { key: 'stopLoss', label: 'STOP LOSS', width: 100, editable: true, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
@@ -365,7 +398,7 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
         if (!entry.exitPrice && (col.key === 'pnlUsd' || col.key === 'pnlPips')) {
           value = runtimePnL[col.key]
         }
-        const formatted = col.format ? col.format(value) : value
+        const formatted = col.format ? col.format(value, entry) : value
         const isEditable = col.editable && !editing[col.key]
 
         return (
@@ -381,7 +414,17 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
             }}
             onDoubleClick={() => {
               if (!col.editable || editing[col.key]) return
-              if (col.type !== 'dropdown') {
+              if (col.type === 'multiselect') {
+                const currentValue = Array.isArray(value)
+                  ? value
+                  : value
+                    ? String(value)
+                        .split(/[,;]+/)
+                        .map((v) => v.trim())
+                        .filter(Boolean)
+                    : []
+                setDraftValues((prev) => ({ ...prev, [col.key]: currentValue }))
+              } else if (col.type !== 'dropdown') {
                 setDraftValues((prev) => ({ ...prev, [col.key]: String(value ?? '') }))
               }
               setEditing({ ...editing, [col.key]: true })
@@ -399,6 +442,36 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
                 style={{
                   width: '100%',
                   padding: '2px 4px',
+                  background: C.bg,
+                  border: `1px solid ${C.amber}`,
+                  color: C.text,
+                  borderRadius: 2,
+                  fontFamily: 'inherit',
+                  fontSize: 10,
+                }}
+              >
+                {col.options.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            ) : col.type === 'multiselect' && editing[col.key] ? (
+              <select
+                multiple
+                size={Math.min(col.options.length, 10)}
+                value={Array.isArray(draftValues[col.key]) ? draftValues[col.key] : value || []}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions).map(opt => opt.value)
+                  setDraftValues((prev) => ({ ...prev, [col.key]: selected }))
+                }}
+                onBlur={() => {
+                  commitChange(col.key, draftValues[col.key] ?? value ?? [])
+                  setEditing({ ...editing, [col.key]: false })
+                }}
+                autoFocus
+                style={{
+                  width: '100%',
+                  minWidth: 200,
+                  padding: '4px',
                   background: C.bg,
                   border: `1px solid ${C.amber}`,
                   color: C.text,
@@ -453,7 +526,7 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
                   opacity: col.editable ? 1 : 0.7,
                 }}
               >
-                {formatted}
+                {col.type === 'multiselect' ? formatMultiValues(value) : formatted}
               </span>
             )}
           </td>

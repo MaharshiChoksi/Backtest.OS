@@ -6,6 +6,8 @@ const REQUIRED_KEYS = [
   'pnlUsd', 'pnlPips', 'rr', 'exitPrice', 'exitDate', 'exitTime', 'winLoss', 'notes',
 ]
 
+const CONFLUENCE_OPTION_COUNT = 11
+
 const HEADER_ALIASES = {
   account: 'account',
   balance: 'balance',
@@ -52,6 +54,8 @@ const HEADER_ALIASES = {
   winloss: 'winLoss',
   'win/loss': 'winLoss',
   notes: 'notes',
+  confluences: 'confluences',
+  'confluence score': 'confluenceScore',
 }
 
 function normHeader(v) {
@@ -73,6 +77,14 @@ function parseOptionalNumber(v) {
   if (!s || s === '-' || s === '—') return null
   const n = Number(s.replace(/[$,%]/g, ''))
   return Number.isFinite(n) ? n : null
+}
+
+function parseMultiValueString(v) {
+  if (v === null || v === undefined) return []
+  return String(v)
+    .split(/[,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 function parseTimestamp(entryDate, entryTime) {
@@ -122,6 +134,13 @@ export function parseJournalRows(headers, rows) {
     const exitTimeRaw = String(get('exitTime') || '').trim()
     const exitTimestamp = exitDateRaw ? parseTimestamp(exitDateRaw, exitTimeRaw) : null
 
+    const rawMacroRegime = get('macroRegime')
+    const rawStrategyType = get('strategyType')
+    const rawConfluences = get('confluences')
+    const macroRegime = parseMultiValueString(rawMacroRegime)
+    const strategyType = parseMultiValueString(rawStrategyType)
+    const confluences = parseMultiValueString(rawConfluences)
+    const rawScore = String(get('confluenceScore') || '').trim()
     const entry = {
       tradeId: `imp-${timestamp}-${i}`,
       account: String(get('account') || 'BackTest'),
@@ -136,10 +155,12 @@ export function parseJournalRows(headers, rows) {
       entryPrice: parseNumber(get('entryPrice')),
       lotSize: parseNumber(get('lotSize'), 0),
       session: String(get('session') || ''),
-      macroRegime: String(get('macroRegime') || ''),
-      strategyType: String(get('strategyType') || ''),
+      macroRegime,
+      strategyType,
       analysisTf: String(get('analysisTf') || ''),
       entryTf: String(get('entryTf') || ''),
+      confluences,
+      confluenceScore: rawScore || `${confluences.length}/${CONFLUENCE_OPTION_COUNT}`,
       stopLoss: parseOptionalNumber(get('stopLoss')),
       takeProfit: parseOptionalNumber(get('takeProfit')),
       risk: parseNumber(get('risk')),
