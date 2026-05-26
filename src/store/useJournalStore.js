@@ -11,6 +11,25 @@ const load = () => {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] }
 }
 
+const CONFLUENCE_OPTIONS = [
+  'HTF Zone',
+  'HH-HL Intact / LH-LL Intact',
+  'CHoCH Confirmed',
+  'Level Flipped',
+  '20/50 Crossed',
+  'Price > 200 EMA / Price < 200 EMA',
+  '20/50 > 200 EMA / 20/50 < 200 EMA',
+  '200 EMA Turning',
+  'Bodies Shrinking',
+  'Volume Declining',
+  'Entry Candle',
+]
+
+const buildConfluenceScore = (confluences = []) => {
+  const count = Array.isArray(confluences) ? confluences.filter(Boolean).length : 0
+  return `${count}/${CONFLUENCE_OPTIONS.length}`
+}
+
 /**
  * Journal store - tracks trade journal entries with auto-sync capabilities
  */
@@ -67,10 +86,12 @@ export const useJournalStore = create((set, get) => ({
         entryPrice: trade.entry,
         lotSize: trade.size,
         session: '', // User selectable
-        macroRegime: '', // User selectable
-        strategyType: '', // User selectable
+        macroRegime: [], // User selectable
+        strategyType: [], // User selectable
         analysisTf: '', // User selectable
         entryTf: '', // User selectable
+        confluences: [],
+        confluenceScore: buildConfluenceScore([]),
         stopLoss: trade.sl || null,
         takeProfit: trade.tp || null,
         risk,
@@ -217,7 +238,18 @@ export const useJournalStore = create((set, get) => ({
           newEntry.risk = riskPips * pipValue * newEntry.lotSize
         }
         
-        // Recalculate RR when SL/TP change
+        if (field === 'confluences') {
+          if (typeof value === 'string') {
+            newEntry.confluences = value
+              .split(/[,;]+/) 
+              .map((v) => v.trim())
+              .filter(Boolean)
+          } else if (Array.isArray(value)) {
+            newEntry.confluences = value
+          }
+          newEntry.confluenceScore = buildConfluenceScore(newEntry.confluences)
+        }
+
         if (field === 'stopLoss' || field === 'takeProfit') {
           if (newEntry.stopLoss && newEntry.takeProfit) {
             const riskPips = Math.abs((newEntry.entryPrice - newEntry.stopLoss) / pip_size)
@@ -225,7 +257,7 @@ export const useJournalStore = create((set, get) => ({
             newEntry.rr = riskPips > 0 ? parseFloat((rewardPips / riskPips).toFixed(2)) : 0
           }
         }
-        
+
         return newEntry
       })
       persist(updated)
@@ -255,6 +287,7 @@ export const useJournalStore = create((set, get) => ({
       'ACCOUNT', 'BALANCE', 'DEPOSITS', 'WITHDRAWALS',
       'ENTRY DATE', 'ENTRY TIME', 'PAIR', 'DIRECTION', 'ENTRY PRICE', 'LOT SIZE',
       'SESSION', 'MACRO REGIME', 'STRATEGY TYPE', 'ANALYSIS TF', 'ENTRY TF',
+      'CONFLUENCES', 'CONFLUENCE SCORE',
       'STOP LOSS', 'TAKE PROFIT', 'RISK ($)', 'FEES ($)',
       'P/L ($)', 'P/L (PIPS)', 'RR', 'EXIT PRICE', 'EXIT DATE', 'EXIT TIME', 'WIN/LOSS', 'NOTES'
     ]
@@ -262,7 +295,12 @@ export const useJournalStore = create((set, get) => ({
     const rows = entries.map(e => [
       e.account, e.balance.toFixed(2), e.deposits.toFixed(2), e.withdrawals.toFixed(2),
       e.entryDate, e.entryTime, e.pair, e.direction, e.entryPrice.toFixed(5), e.lotSize,
-      e.session, e.macroRegime, e.strategyType, e.analysisTf, e.entryTf,
+      e.session,
+      Array.isArray(e.macroRegime) ? e.macroRegime.join(', ') : e.macroRegime || '',
+      Array.isArray(e.strategyType) ? e.strategyType.join(', ') : e.strategyType || '',
+      e.analysisTf, e.entryTf,
+      Array.isArray(e.confluences) ? e.confluences.join(', ') : e.confluences || '',
+      e.confluenceScore || buildConfluenceScore(e.confluences),
       e.stopLoss ? e.stopLoss.toFixed(5) : '', e.takeProfit ? e.takeProfit.toFixed(5) : '', 
       e.risk.toFixed(2), e.fees.toFixed(2),
       e.pnlUsd.toFixed(2), e.pnlPips.toFixed(2), e.rr.toFixed(2), 
