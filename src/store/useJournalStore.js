@@ -144,17 +144,19 @@ export const useJournalStore = create((set, get) => ({
       let updated = s.entries.map(e => {
         if (e.tradeId !== trade.id) return e
 
-        if (!symbolConfig) return e
-
-        const pip_size = symbolConfig.pip_size || 0.0001
+        const pip_size = symbolConfig?.pip_size || 0.0001
         const pnlPips = (trade.closePrice - e.entryPrice) / pip_size * (e.direction === 'SELL' ? -1 : 1)
         
-        // Calculate RR
+        // Calculate RR and risk
         let rr = 0
-        if (e.stopLoss && e.takeProfit) {
+        let risk = 0
+        if (e.stopLoss) {
           const riskPips = Math.abs((e.entryPrice - e.stopLoss) / pip_size)
-          const rewardPips = Math.abs((e.takeProfit - e.entryPrice) / pip_size)
-          rr = riskPips > 0 ? rewardPips / riskPips : 0
+          risk = riskPips * (symbolConfig?.pip_value || 10) * e.lotSize
+          if (e.takeProfit) {
+            const rewardPips = Math.abs((e.takeProfit - e.entryPrice) / pip_size)
+            rr = riskPips > 0 ? rewardPips / riskPips : 0
+          }
         }
 
         return {
@@ -166,6 +168,7 @@ export const useJournalStore = create((set, get) => ({
           pnlUsd: trade.pnl || 0,  // Trade PnL already has commission deducted, fees column is just for reference
           pnlPips: pnlPips,
           rr: parseFloat(rr.toFixed(2)),
+          risk: parseFloat(risk.toFixed(2)),
           winLoss: (trade.pnl || 0) >= 0 ? 'WIN' : 'LOSS',
           closureReason: trade.closeReason || 'Manual',
         }

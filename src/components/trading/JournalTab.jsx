@@ -242,17 +242,17 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
   const columnDefs = [
     // Account Details
     { key: 'account', label: 'ACCOUNT', width: 100, editable: true, type: 'dropdown', options: ACCOUNTS },
-    { key: 'balance', label: 'BALANCE', width: 90, editable: false, format: (v) => `$${v.toFixed(0)}` },
-    { key: 'deposits', label: 'DEPOSITS', width: 90, editable: false, format: (v) => `$${v.toFixed(0)}` },
-    { key: 'withdrawals', label: 'WITHDRAWALS', width: 100, editable: false, format: (v) => `$${v.toFixed(0)}` },
+    { key: 'balance', label: 'BALANCE', width: 90, editable: false, format: (v) => `$${Number.isFinite(Number(v)) ? Number(v).toFixed(0) : '0'}` },
+    { key: 'deposits', label: 'DEPOSITS', width: 90, editable: false, format: (v) => `$${Number.isFinite(Number(v)) ? Number(v).toFixed(0) : '0'}` },
+    { key: 'withdrawals', label: 'WITHDRAWALS', width: 100, editable: false, format: (v) => `$${Number.isFinite(Number(v)) ? Number(v).toFixed(0) : '0'}` },
 
     // Trade Entry Details
     { key: 'entryDate', label: 'ENTRY DATE', width: 100, editable: false },
     { key: 'entryTime', label: 'ENTRY TIME', width: 90, editable: false },
     { key: 'pair', label: 'PAIR', width: 80, editable: true, type: 'dropdown', options: SYMBOLS },
     { key: 'direction', label: 'DIRECTION', width: 80, editable: true, type: 'dropdown', options: ['BUY', 'SELL'] },
-    { key: 'entryPrice', label: 'ENTRY PRICE', width: 100, editable: false, format: (v) => v.toFixed(priceDecimals) },
-    { key: 'lotSize', label: 'LOT SIZE', width: 80, editable: true, format: (v) => v.toFixed(2) },
+    { key: 'entryPrice', label: 'ENTRY PRICE', width: 100, editable: false, format: (v) => Number.isFinite(Number(v)) ? Number(v).toFixed(priceDecimals) : '—' },
+    { key: 'lotSize', label: 'LOT SIZE', width: 80, editable: true, format: (v) => Number.isFinite(Number(v)) ? Number(v).toFixed(2) : '0.00' },
 
     // Session & Strategy
     { key: 'session', label: 'SESSION', width: 100, editable: true, type: 'dropdown', options: SESSION_OPTIONS },
@@ -264,16 +264,16 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
     { key: 'confluenceScore', label: 'CONFLUENCE SCORE', width: 120, editable: false, format: (_, entry) => formatConfluenceScore(entry) },
 
     // Position Management
-    { key: 'stopLoss', label: 'STOP LOSS', width: 100, editable: true, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
-    { key: 'takeProfit', label: 'TAKE PROFIT', width: 110, editable: true, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
-    { key: 'risk', label: 'RISK ($)', width: 90, editable: false, format: (v) => `$${v.toFixed(2)}` },
-    { key: 'fees', label: 'FEES ($)', width: 85, editable: true, format: (v) => `$${v.toFixed(2)}` },
+    { key: 'stopLoss', label: 'STOP LOSS', width: 100, editable: true, format: (v) => Number.isFinite(Number(v)) ? Number(v).toFixed(priceDecimals) : '—' },
+    { key: 'takeProfit', label: 'TAKE PROFIT', width: 110, editable: true, format: (v) => Number.isFinite(Number(v)) ? Number(v).toFixed(priceDecimals) : '—' },
+    { key: 'risk', label: 'RISK ($)', width: 90, editable: false, format: (v) => `$${Number.isFinite(Number(v)) ? Number(v).toFixed(2) : '0.00'}` },
+    { key: 'fees', label: 'FEES ($)', width: 85, editable: true, format: (v) => `$${Number.isFinite(Number(v)) ? Number(v).toFixed(2) : '0.00'}` },
 
     // Results (auto-calculated)
     { key: 'pnlUsd', label: 'P/L ($)', width: 90, editable: false, format: (v) => fmtPnl(v) },
-    { key: 'pnlPips', label: 'P/L (PIPS)', width: 100, editable: false, format: (v) => v.toFixed(1) },
-    { key: 'rr', label: 'RR', width: 70, editable: false, format: (v) => v.toFixed(2) },
-    { key: 'exitPrice', label: 'EXIT PRICE', width: 110, editable: true, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
+    { key: 'pnlPips', label: 'P/L (PIPS)', width: 100, editable: false, format: (v) => Number.isFinite(Number(v)) ? Number(v).toFixed(1) : '0.0' },
+    { key: 'rr', label: 'RR', width: 70, editable: false, format: (v) => Number.isFinite(Number(v)) ? Number(v).toFixed(2) : '0.00' },
+    { key: 'exitPrice', label: 'EXIT PRICE', width: 110, editable: true, format: (v) => v ? Number(v).toFixed(priceDecimals) : '—' },
     { key: 'exitDate', label: 'EXIT DATE', width: 100, editable: false },
     { key: 'exitTime', label: 'EXIT TIME', width: 90, editable: false },
     { key: 'winLoss', label: 'WIN/LOSS', width: 80, editable: false },
@@ -393,8 +393,12 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
         sl: key === 'stopLoss' ? numValue : entry.stopLoss,
         tp: key === 'takeProfit' ? numValue : entry.takeProfit,
       })
-      // Recompute PnL if trade was closed
+      // Recompute trade pnl and refresh closed journal row
       useTradeStore.getState().recomputeTradePnl(entry.tradeId, symbolConfig, accountConfig)
+      const refreshed = useTradeStore.getState().trades.find(t => t.id === entry.tradeId)
+      if (refreshed && refreshed.status === 'closed') {
+        useJournalStore.getState().syncClosedTrade(refreshed, symbolConfig)
+      }
     }
 
     // If exit price edited, update trade store and sync journal calculations
@@ -411,27 +415,60 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
           // ignore lookup errors
         }
 
-        useTradeStore.getState().closeTrade(entry.tradeId, parsed, closeTs, 'ManualEdit', manualSymbolConfig, accountConfig)
+        const tradeStore = useTradeStore.getState()
+        const currentTrade = tradeStore.trades.find(t => t.id === entry.tradeId)
+        if (currentTrade) {
+          if (currentTrade.status === 'open') {
+            useTradeStore.getState().closeTrade(entry.tradeId, parsed, closeTs, 'ManualEdit', manualSymbolConfig, accountConfig)
+          } else {
+            const updatedCloseTime = currentTrade.closeTime || closeTs
+            useTradeStore.getState().modifyTrade(entry.tradeId, { closePrice: parsed, closeTime: updatedCloseTime })
+          }
+        }
       } catch (err) {
         // ignore
       }
-      const updatedTrade = useTradeStore.getState().trades.find(t => t.id === entry.tradeId)
-      if (updatedTrade) {
-        useJournalStore.getState().syncClosedTrade(updatedTrade, manualSymbolConfig)
-        // Ensure journal reflects any recalculated fees/pnl
-        useTradeStore.getState().recomputeTradePnl(entry.tradeId, manualSymbolConfig, accountConfig)
-        const refreshed = useTradeStore.getState().trades.find(t => t.id === entry.tradeId)
-        if (refreshed) useJournalStore.getState().syncClosedTrade(refreshed, manualSymbolConfig)
+      useTradeStore.getState().recomputeTradePnl(entry.tradeId, manualSymbolConfig, accountConfig)
+      const refreshed = useTradeStore.getState().trades.find(t => t.id === entry.tradeId)
+      if (refreshed) {
+        useJournalStore.getState().syncClosedTrade(refreshed, manualSymbolConfig)
       }
     }
 
-    // If fees, lotSize, entryPrice changed, recompute PnL for closed trades
-    if (['fees', 'lotSize', 'entryPrice'].includes(key)) {
-      useTradeStore.getState().modifyTrade(entry.tradeId, key === 'lotSize' ? { size: finalValue } : key === 'fees' ? { fees: finalValue } : { entry: finalValue })
-      useTradeStore.getState().recomputeTradePnl(entry.tradeId, symbolConfig, accountConfig)
+    // If fees, lotSize, entryPrice, or direction changed, update trade and recompute PnL
+    if (['fees', 'lotSize', 'entryPrice', 'direction'].includes(key)) {
+      const tradeUpdate = key === 'lotSize'
+        ? { size: finalValue }
+        : key === 'fees'
+          ? { fees: finalValue }
+          : key === 'entryPrice'
+            ? { entry: finalValue }
+            : key === 'direction'
+              ? { side: finalValue.toLowerCase() }
+              : {}
+
+      if (Object.keys(tradeUpdate).length > 0) {
+        useTradeStore.getState().modifyTrade(entry.tradeId, tradeUpdate)
+        useTradeStore.getState().recomputeTradePnl(entry.tradeId, symbolConfig, accountConfig)
+        const refreshed = useTradeStore.getState().trades.find(t => t.id === entry.tradeId)
+        if (refreshed && refreshed.status === 'closed') {
+          useJournalStore.getState().syncClosedTrade(refreshed, symbolConfig)
+        }
+      }
+    }
+
+    if (key === 'pair') {
+      let manualSymbolConfig = symbolConfig
+      try {
+        const found = await searchSymbol(finalValue)
+        if (found) manualSymbolConfig = found
+      } catch (err) {
+        // ignore
+      }
+      useTradeStore.getState().recomputeTradePnl(entry.tradeId, manualSymbolConfig, accountConfig)
       const refreshed = useTradeStore.getState().trades.find(t => t.id === entry.tradeId)
       if (refreshed && refreshed.status === 'closed') {
-        useJournalStore.getState().syncClosedTrade(refreshed, symbolConfig)
+        useJournalStore.getState().syncClosedTrade(refreshed, manualSymbolConfig)
       }
     }
   }
