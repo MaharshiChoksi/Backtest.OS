@@ -29,12 +29,16 @@ function saveTrades(trades) {
 /**
  * Calculate PnL using pip-based formula
  */
-function calculateTradePnL(entry, exit, side, size, symbolConfig, accountConfig) {
-  if (!symbolConfig || !accountConfig) {
-    // Fallback: simple price-based calculation
-    return side === 'buy'
-      ? (exit - entry) * size
-      : (entry - exit) * size
+function calculateTradePnL(entry, exit, side, size, symbolConfig, accountConfig, tradeFees = null) {
+  // tradeFees: optional total fees for the trade (entry + exit). If provided, use it.
+  // If not provided, fall back to accountConfig.commission per-side (default $3 per side) * size * 2
+  const defaultPerSide = accountConfig?.commission ?? 3
+
+  if (!symbolConfig) {
+    // Fallback: simple price-based calculation (no pip conversion)
+    const raw = side === 'buy' ? (exit - entry) * size : (entry - exit) * size
+    const totalFees = tradeFees != null ? tradeFees : (defaultPerSide * size * 2)
+    return raw - totalFees
   }
 
   const pipSize = symbolConfig.pip_size || 0.0001
@@ -45,9 +49,8 @@ function calculateTradePnL(entry, exit, side, size, symbolConfig, accountConfig)
   const pnlPips = (priceDiff / pipSize) * (side === 'sell' ? -1 : 1)
   const rawPnL = pnlPips * pipValue * size
 
-  // Apply commission (scaled by lot size: entry + exit)
-  const commission = accountConfig.commission || 0
-  const pnlWithCommission = rawPnL - (commission * size * 2)
+  const totalFees = tradeFees != null ? tradeFees : (defaultPerSide * size * 2)
+  const pnlWithCommission = rawPnL - totalFees
 
   return pnlWithCommission
 }
@@ -88,7 +91,7 @@ export const useTradeStore = create((set, get) => {
       set((s) => {
         const updated = s.trades.map((t) => {
           if (t.id !== id || t.status !== 'open') return t
-          const pnl = calculateTradePnL(t.entry, closePrice, t.side, t.size, symbolConfig, accountConfig)
+          const pnl = calculateTradePnL(t.entry, closePrice, t.side, t.size, symbolConfig, accountConfig, t.fees)
           return { ...t, status: 'closed', closePrice, closeTime, pnl, closeReason: reason }
         })
         saveTrades(updated)
@@ -119,23 +122,23 @@ export const useTradeStore = create((set, get) => {
         if (t.side === 'buy') {
           if (t.sl && bar.low <= t.sl) {
             changed = true
-            const pnl = calculateTradePnL(t.entry, t.sl, t.side, t.size, symbolConfig, accountConfig)
+            const pnl = calculateTradePnL(t.entry, t.sl, t.side, t.size, symbolConfig, accountConfig, t.fees)
             return { ...t, status: 'closed', closePrice: t.sl, closeTime: bar.time, pnl, closeReason: 'SL', fees: t.fees }
           }
           if (t.tp && bar.high >= t.tp) {
             changed = true
-            const pnl = calculateTradePnL(t.entry, t.tp, t.side, t.size, symbolConfig, accountConfig)
+            const pnl = calculateTradePnL(t.entry, t.tp, t.side, t.size, symbolConfig, accountConfig, t.fees)
             return { ...t, status: 'closed', closePrice: t.tp, closeTime: bar.time, pnl, closeReason: 'TP', fees: t.fees }
           }
         } else if (t.side === 'sell') {
           if (t.sl && bar.high >= t.sl) {
             changed = true
-            const pnl = calculateTradePnL(t.entry, t.sl, t.side, t.size, symbolConfig, accountConfig)
+            const pnl = calculateTradePnL(t.entry, t.sl, t.side, t.size, symbolConfig, accountConfig, t.fees)
             return { ...t, status: 'closed', closePrice: t.sl, closeTime: bar.time, pnl, closeReason: 'SL', fees: t.fees }
           }
           if (t.tp && bar.low <= t.tp) {
             changed = true
-            const pnl = calculateTradePnL(t.entry, t.tp, t.side, t.size, symbolConfig, accountConfig)
+            const pnl = calculateTradePnL(t.entry, t.tp, t.side, t.size, symbolConfig, accountConfig, t.fees)
             return { ...t, status: 'closed', closePrice: t.tp, closeTime: bar.time, pnl, closeReason: 'TP', fees: t.fees }
           }
         }
@@ -158,6 +161,22 @@ export const useTradeStore = create((set, get) => {
       saveTrades(updated)
       return { trades: updated }
     }),
+
+    /**
+     * Recompute PnL for a trade (closed or open) using current trade fields.
+     * Useful when journal fields (fees, lot size, entry/close price) are edited.
+     */
+    recomputeTradePnl: (id, symbolConfig = null, accountConfig = null) =>
+      set((s) => {
+        const updated = s.trades.map((t) => {
+          if (t.id !== id) return t
+          if (t.closePrice == null) return t
+          const pnl = calculateTradePnL(t.entry, t.closePrice, t.side, t.size, symbolConfig, accountConfig, t.fees)
+          return { ...t, pnl }
+        })
+        saveTrades(updated)
+        return { trades: updated }
+      }),
 
     // ── Derived selectors ──────────────────────────────────────
     getOpen: () => get().trades.filter((t) => t.status === 'open'),

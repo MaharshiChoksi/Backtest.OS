@@ -81,7 +81,8 @@ export function TradeForm() {
   const handleOpen = () => {
     if (!canOpenTrade) return
     const tradeSize = parseFloat(size) || 0.1
-    const fees = tradeSize * (accountConfig?.commission || 0) * 2 // entry + exit commissions
+    const commissionPerSide = accountConfig?.commission ?? 3
+    const fees = tradeSize * commissionPerSide * 2 // entry + exit commissions
     openTrade({
       side,
       size:     tradeSize,

@@ -95,7 +95,7 @@ export const useJournalStore = create((set, get) => ({
         stopLoss: trade.sl || null,
         takeProfit: trade.tp || null,
         risk,
-        fees: (accountConfig?.commission || 0) * trade.size * 2,
+        fees: typeof trade.fees === 'number' ? trade.fees : ((accountConfig?.commission ?? 3) * trade.size * 2),
         exitPrice: null,
         exitTimestamp: null,
         exitDate: null,

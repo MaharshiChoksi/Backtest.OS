@@ -4,6 +4,7 @@ import { useSimStore } from '../../store/useSimStore'
 import { useTradeStore } from '../../store/useTradeStore'
 import { useJournalStore } from '../../store/useJournalStore'
 import { getDecimalPlaces, getExitPrice } from '../../utils/tradingUtils'
+import { searchSymbol } from '../../utils/symbolUtils'
 import { FONT } from '../../constants'
 import { fmt, fmtPnl } from '../../utils/format'
 import { SectionHeader } from '../ui/atoms'
@@ -358,7 +359,7 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
     }
   }, [entry, currentBar, symbolConfig, accountConfig])
 
-  const commitChange = (key, value) => {
+  const commitChange = async (key, value) => {
     // Convert numeric fields to numbers
     let finalValue = value
     if (key === 'risk' || key === 'fees' || key === 'lotSize') {
@@ -375,6 +376,11 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
 
     updateEntry(entry.tradeId, key, finalValue)
 
+    // Sync changes to the trade store for fields that affect PnL
+    const tradeStore = useTradeStore.getState()
+    const modify = tradeStore.modifyTrade
+
+
     // Also update trade details for SL/TP
     if (key === 'stopLoss' || key === 'takeProfit') {
       const numValue = finalValue
@@ -387,6 +393,8 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
         sl: key === 'stopLoss' ? numValue : entry.stopLoss,
         tp: key === 'takeProfit' ? numValue : entry.takeProfit,
       })
+      // Recompute PnL if trade was closed
+      useTradeStore.getState().recomputeTradePnl(entry.tradeId, symbolConfig, accountConfig)
     }
 
     // If exit price edited, update trade store and sync journal calculations
@@ -394,14 +402,36 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
       const parsed = parseFloat(finalValue)
       if (!Number.isFinite(parsed)) return
       const closeTs = entry.exitTimestamp || Date.now()
+      let manualSymbolConfig = symbolConfig
       try {
-        useTradeStore.getState().closeTrade(entry.tradeId, parsed, closeTs, 'ManualEdit', symbolConfig, accountConfig)
+        try {
+          const found = await searchSymbol(entry.pair)
+          if (found) manualSymbolConfig = found
+        } catch (err) {
+          // ignore lookup errors
+        }
+
+        useTradeStore.getState().closeTrade(entry.tradeId, parsed, closeTs, 'ManualEdit', manualSymbolConfig, accountConfig)
       } catch (err) {
         // ignore
       }
       const updatedTrade = useTradeStore.getState().trades.find(t => t.id === entry.tradeId)
-      if (updatedTrade && symbolConfig) {
-        useJournalStore.getState().syncClosedTrade(updatedTrade, symbolConfig)
+      if (updatedTrade) {
+        useJournalStore.getState().syncClosedTrade(updatedTrade, manualSymbolConfig)
+        // Ensure journal reflects any recalculated fees/pnl
+        useTradeStore.getState().recomputeTradePnl(entry.tradeId, manualSymbolConfig, accountConfig)
+        const refreshed = useTradeStore.getState().trades.find(t => t.id === entry.tradeId)
+        if (refreshed) useJournalStore.getState().syncClosedTrade(refreshed, manualSymbolConfig)
+      }
+    }
+
+    // If fees, lotSize, entryPrice changed, recompute PnL for closed trades
+    if (['fees', 'lotSize', 'entryPrice'].includes(key)) {
+      useTradeStore.getState().modifyTrade(entry.tradeId, key === 'lotSize' ? { size: finalValue } : key === 'fees' ? { fees: finalValue } : { entry: finalValue })
+      useTradeStore.getState().recomputeTradePnl(entry.tradeId, symbolConfig, accountConfig)
+      const refreshed = useTradeStore.getState().trades.find(t => t.id === entry.tradeId)
+      if (refreshed && refreshed.status === 'closed') {
+        useJournalStore.getState().syncClosedTrade(refreshed, symbolConfig)
       }
     }
   }

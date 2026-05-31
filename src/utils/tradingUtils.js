@@ -233,7 +233,7 @@ export function calculatePnL(entryPrice, exitPrice, lotSize, symbolConfig, accou
   const rawPnL = pipsMove * pipValue * lotSize
 
   // Apply commission (scaled by lot size: entry + exit)
-  const commission = accountConfig.commission || 0
+  const commission = accountConfig?.commission ?? 3
   const pnlWithCommission = rawPnL - (commission * lotSize * 2)
 
   return pnlWithCommission
