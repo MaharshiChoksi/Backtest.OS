@@ -272,7 +272,7 @@ function JournalTable({ entries, updateEntry, updateTradeDetails, modifyTrade, r
     { key: 'pnlUsd', label: 'P/L ($)', width: 90, editable: false, format: (v) => fmtPnl(v) },
     { key: 'pnlPips', label: 'P/L (PIPS)', width: 100, editable: false, format: (v) => v.toFixed(1) },
     { key: 'rr', label: 'RR', width: 70, editable: false, format: (v) => v.toFixed(2) },
-    { key: 'exitPrice', label: 'EXIT PRICE', width: 110, editable: false, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
+    { key: 'exitPrice', label: 'EXIT PRICE', width: 110, editable: true, format: (v) => v ? v.toFixed(priceDecimals) : '—' },
     { key: 'exitDate', label: 'EXIT DATE', width: 100, editable: false },
     { key: 'exitTime', label: 'EXIT TIME', width: 90, editable: false },
     { key: 'winLoss', label: 'WIN/LOSS', width: 80, editable: false },
@@ -387,6 +387,22 @@ function TableRow({ entry, columnDefs, updateEntry, updateTradeDetails, modifyTr
         sl: key === 'stopLoss' ? numValue : entry.stopLoss,
         tp: key === 'takeProfit' ? numValue : entry.takeProfit,
       })
+    }
+
+    // If exit price edited, update trade store and sync journal calculations
+    if (key === 'exitPrice') {
+      const parsed = parseFloat(finalValue)
+      if (!Number.isFinite(parsed)) return
+      const closeTs = entry.exitTimestamp || Date.now()
+      try {
+        useTradeStore.getState().closeTrade(entry.tradeId, parsed, closeTs, 'ManualEdit', symbolConfig, accountConfig)
+      } catch (err) {
+        // ignore
+      }
+      const updatedTrade = useTradeStore.getState().trades.find(t => t.id === entry.tradeId)
+      if (updatedTrade && symbolConfig) {
+        useJournalStore.getState().syncClosedTrade(updatedTrade, symbolConfig)
+      }
     }
   }
 

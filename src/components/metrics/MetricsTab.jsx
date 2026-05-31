@@ -7,6 +7,7 @@ import { useJournalStore } from '../../store/useJournalStore'
 import { calculateMetrics, calculateWebSummary } from '../../utils/metrics'
 import { createChart, CrosshairMode, LineSeries } from 'lightweight-charts'
 import { RadarChart } from './RadarChart'
+// import { ManualTradeModal } from '../trading/ManualTradeModal'
 import { FONT } from '../../constants'
 import { fmt, fmtPnl, fmtShortDate } from '../../utils/format'
 
@@ -259,6 +260,7 @@ export function MetricsTab() {
           metricsLoading={metricsLoading}
           setMetricsLoading={setMetricsLoading}
         />
+        {/* Add Trade removed from Metrics view — journal provides authoritative data only */}
 
         {/* Content based on active sub-tab */}
         {activeSubTab === 'summary' && (

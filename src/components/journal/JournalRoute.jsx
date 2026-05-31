@@ -5,6 +5,8 @@ import { parseDelimitedAsync } from '../../utils/parser'
 import { parseJournalRows, validateJournalHeaders } from '../../utils/journalImport'
 import { JournalTab } from '../trading/JournalTab'
 import { MetricsTab } from '../metrics/MetricsTab'
+import { ManualTradeModal } from '../trading/ManualTradeModal'
+import { useSimStore } from '../../store/useSimStore'
 import { FONT } from '../../constants'
 
 export function JournalRoute({ onBack }) {
@@ -14,9 +16,12 @@ export function JournalRoute({ onBack }) {
   const entries = useJournalStore((s) => s.entries)
 
   const [showMetrics, setShowMetrics] = useState(false)
+  const [showAddTrade, setShowAddTrade] = useState(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const bars = useSimStore((s) => s.bars)
+  const cursor = useSimStore((s) => s.cursor)
 
   const handleImport = async (file) => {
     if (!file) return
@@ -120,6 +125,23 @@ export function JournalRoute({ onBack }) {
         >
           {showMetrics ? 'Metrics Enabled' : 'Enable Metrics'}
         </button>
+        <button
+          onClick={() => setShowAddTrade(true)}
+          style={{
+            marginLeft: 8,
+            background: C.green,
+            border: 'none',
+            color: '#000000',
+            borderRadius: 4,
+            padding: '6px 12px',
+            cursor: 'pointer',
+            fontFamily: FONT,
+            fontSize: 11,
+            fontWeight: 700,
+          }}
+        >
+          + Add Trade
+        </button>
         <div style={{ marginLeft: 'auto', fontSize: 11, color: C.muted }}>
           Entries: {entries.length}
         </div>
@@ -142,6 +164,9 @@ export function JournalRoute({ onBack }) {
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {showMetrics ? <MetricsTab /> : <JournalTab />}
+        {showAddTrade && (
+          <ManualTradeModal onClose={() => setShowAddTrade(false)} currentBar={bars[cursor - 1]} cursor={cursor} />
+        )}
       </div>
     </div>
   )

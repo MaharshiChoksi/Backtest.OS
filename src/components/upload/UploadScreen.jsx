@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useTheme } from '../../store/useThemeStore'
+import { useTheme, useThemeStore } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
 import { useIndicatorStore as useIndStore } from '../../store/useIndicatorStore'
 import { FONT } from '../../constants'
@@ -644,23 +644,44 @@ export function UploadScreen({ onOpenJournal }) {
         </div>
         <div style={{ width: 40, height: 1, background: C.amber + '50', margin: '18px auto 0' }} />
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <button
-            onClick={onOpenJournal}
-            style={{
-              background: 'transparent',
-              border: `1px solid ${C.border2}`,
-              color: C.text,
-              borderRadius: 6,
-              padding: '8px 14px',
-              cursor: 'pointer',
-              fontSize: 11,
-              fontFamily: '"JetBrains Mono", "SF Mono", monospace',
-              fontWeight: 600,
-              letterSpacing: '0.5px',
-            }}
-          >
-            Open Journal & Metrics Route
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={onOpenJournal}
+              style={{
+                background: 'transparent',
+                border: `1px solid ${C.border2}`,
+                color: C.text,
+                borderRadius: 6,
+                padding: '8px 14px',
+                cursor: 'pointer',
+                fontSize: 11,
+                fontFamily: '"JetBrains Mono", "SF Mono", monospace',
+                fontWeight: 600,
+                letterSpacing: '0.5px',
+              }}
+            >
+              Open Journal & Metrics Route
+            </button>
+
+            <button
+              onClick={() => useThemeStore.getState().toggleTheme()}
+              title="Toggle theme"
+              style={{
+                background: 'transparent',
+                border: `1px solid ${C.border2}`,
+                color: C.text,
+                borderRadius: 6,
+                padding: '8px 12px',
+                cursor: 'pointer',
+                fontSize: 11,
+                fontFamily: '"JetBrains Mono", "SF Mono", monospace',
+                fontWeight: 600,
+                letterSpacing: '0.5px',
+              }}
+            >
+              {useThemeStore.getState().dark ? '🌙 Dark' : '☀️ Light'}
+            </button>
+          </div>
 
           <a
             href="https://github.com/MaharshiChoksi/Backtest.OS"
