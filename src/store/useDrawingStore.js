@@ -78,7 +78,7 @@ function debouncedSync() {
   if (syncTimeout) clearTimeout(syncTimeout)
   syncTimeout = setTimeout(() => {
     syncDrawingsAcrossAll()
-  }, 25)  // Small delay to ensure drawing is committed
+  }, 10)  // Small delay to ensure drawing is committed
 }
 
 function aggregateDrawings() {
