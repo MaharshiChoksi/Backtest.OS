@@ -20,6 +20,7 @@ import { DrawingManager, TOOL_DEFINITIONS, getToolRegistry } from 'lightweight-c
 
 const managers = new Map()  // chartId -> DrawingManager
 let isSyncing = false  // prevent recursive sync loops
+let syncTimeout = null  // debounce timer
 
 const toolLabelMap = {}
 if (TOOL_DEFINITIONS && Array.isArray(TOOL_DEFINITIONS)) {
@@ -47,6 +48,7 @@ function syncDrawingsAcrossAll() {
       })
     })
     
+    const registry_get = registry.get.bind(registry)
     managers.forEach((mgr, chartId) => {
       const currentIds = new Set((drawingsByChart.get(chartId) || []).map(d => d.id))
       const targetIds = new Set(allDrawings.keys())
@@ -54,15 +56,29 @@ function syncDrawingsAcrossAll() {
       
       if (toAdd.length > 0) {
         const toImport = toAdd.map(id => allDrawings.get(id))
-        mgr.importDrawings(toImport, (type, data) => {
-          const def = registry.get(type)
-          return def?.factory ? def.factory(data.id, data.anchors, data.style, data.options) : null
-        })
+        try {
+          mgr.importDrawings(toImport, (type, data) => {
+            const def = registry_get(type)
+            if (!def) return null
+            if (def.factory) return def.factory(data.id, data.anchors, data.style, data.options)
+            if (def.class) return new def.class(data.id, data.anchors, data.style, data.options)
+            return null
+          })
+        } catch (err) {
+          console.error(`Failed to import drawings to chart ${chartId}:`, err)
+        }
       }
     })
   } finally {
     isSyncing = false
   }
+}
+
+function debouncedSync() {
+  if (syncTimeout) clearTimeout(syncTimeout)
+  syncTimeout = setTimeout(() => {
+    syncDrawingsAcrossAll()
+  }, 25)  // Small delay to ensure drawing is committed
 }
 
 function aggregateDrawings() {
@@ -99,14 +115,14 @@ export const useDrawingStore = create((set, get) => ({
 
     const sync = () => {
       set({ drawings: aggregateDrawings() })
-      syncDrawingsAcrossAll()
+      debouncedSync()
     }
     manager.on('drawing:added',   sync)
     manager.on('drawing:removed', sync)
     manager.on('drawing:updated', sync)
     manager.on('drawing:cleared', sync)
 
-    syncDrawingsAcrossAll()
+    debouncedSync()
     return manager
   },
 
