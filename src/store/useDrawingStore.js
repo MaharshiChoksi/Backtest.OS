@@ -19,17 +19,61 @@ import { DrawingManager, TOOL_DEFINITIONS, getToolRegistry } from 'lightweight-c
  */
 
 const managers = new Map()  // chartId -> DrawingManager
+let isSyncing = false  // prevent recursive sync loops
 
 const toolLabelMap = {}
 if (TOOL_DEFINITIONS && Array.isArray(TOOL_DEFINITIONS)) {
   TOOL_DEFINITIONS.forEach((t) => { toolLabelMap[t.type] = t.name })
 }
 
+function syncDrawingsAcrossAll() {
+  if (isSyncing) return
+  isSyncing = true
+  
+  try {
+    const registry = getToolRegistry()
+    const drawingsByChart = new Map()
+    
+    managers.forEach((mgr, chartId) => {
+      drawingsByChart.set(chartId, mgr.exportDrawings?.() || [])
+    })
+    
+    const allDrawings = new Map()
+    drawingsByChart.forEach((drawings) => {
+      drawings.forEach((d) => {
+        if (!allDrawings.has(d.id)) {
+          allDrawings.set(d.id, d)
+        }
+      })
+    })
+    
+    managers.forEach((mgr, chartId) => {
+      const currentIds = new Set((drawingsByChart.get(chartId) || []).map(d => d.id))
+      const targetIds = new Set(allDrawings.keys())
+      const toAdd = Array.from(targetIds).filter(id => !currentIds.has(id))
+      
+      if (toAdd.length > 0) {
+        const toImport = toAdd.map(id => allDrawings.get(id))
+        mgr.importDrawings(toImport, (type, data) => {
+          const def = registry.get(type)
+          return def?.factory ? def.factory(data.id, data.anchors, data.style, data.options) : null
+        })
+      }
+    })
+  } finally {
+    isSyncing = false
+  }
+}
+
 function aggregateDrawings() {
   const all = []
+  const seen = new Set()
   managers.forEach((mgr) => {
     ;(mgr.getAllDrawings?.() || []).forEach((d) => {
-      all.push({ id: d.id, type: d.type, typeLabel: toolLabelMap[d.type] || d.type })
+      if (!seen.has(d.id)) {
+        seen.add(d.id)
+        all.push({ id: d.id, type: d.type, typeLabel: toolLabelMap[d.type] || d.type })
+      }
     })
   })
   return all
@@ -53,12 +97,16 @@ export const useDrawingStore = create((set, get) => ({
     manager.attach(chart, series, container)
     managers.set(chartId, manager)
 
-    const sync = () => set({ drawings: aggregateDrawings() })
+    const sync = () => {
+      set({ drawings: aggregateDrawings() })
+      syncDrawingsAcrossAll()
+    }
     manager.on('drawing:added',   sync)
     manager.on('drawing:removed', sync)
     manager.on('drawing:updated', sync)
     manager.on('drawing:cleared', sync)
 
+    syncDrawingsAcrossAll()
     return manager
   },
 
@@ -75,6 +123,19 @@ export const useDrawingStore = create((set, get) => ({
     managers.forEach((mgr) => mgr.detach())
     managers.clear()
     set({ activeTool: null, drawings: [] })
+  },
+
+  addDrawingToAll: (sourceChartId, tool, id, anchors, style, options) => {
+    const registry = getToolRegistry()
+    const sourceManager = managers.get(sourceChartId)
+    if (!sourceManager) return
+
+    try {
+      const drawing = registry.createDrawing(tool, id, anchors, style, options)
+      if (drawing) {
+        sourceManager.addDrawing(drawing)
+      }
+    } catch (_) {}
   },
 
   removeDrawing: (id) => {
@@ -96,12 +157,15 @@ export const useDrawingStore = create((set, get) => ({
   },
 
   importDrawings: (json) => {
-    const firstMgr = managers.values().next().value
-    if (!firstMgr) return
+    if (!managers.size) return
     const registry = getToolRegistry()
-    firstMgr.importDrawings(json, (type, data) => {
-      const def = registry.getTool(type)
-      return def ? new def.class(data.id, data.anchors, data.style, data.options) : null
+    managers.forEach((mgr) => {
+      try {
+        mgr.importDrawings(json, (type, data) => {
+          const def = registry.get(type)
+          return def ? new def.class(data.id, data.anchors, data.style, data.options) : null
+        })
+      } catch (_) {}
     })
   },
 

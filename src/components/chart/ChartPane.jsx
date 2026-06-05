@@ -330,15 +330,12 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
         const anchors = [...pendingAnchors.current]
         pendingAnchors.current = []
 
-        const drawing = registry.createDrawing(tool, id, anchors, {
+        useDrawingStore.getState().addDrawingToAll(chartId, tool, id, anchors, {
           lineColor: '#2962FF',
           lineWidth: 2,
           fillColor: '#2962FF33',
         })
-        if (drawing) {
-          managerRef.current.addDrawing(drawing)
-          managerRef.current.selectDrawing(id)
-        }
+        useDrawingStore.getState().selectDrawing(id)
       } else {
         // First anchor placed — init rubber-band preview
         const previewAnchors = [
