@@ -139,8 +139,8 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
 
     // ── PB EMA band ───────────────────────────────────────────────────────────
     chartR.pbEma = {}
-    const pbEmaTop = mkLine(C.amber + 'cc', 1)
-    const pbEmaBot = mkLine(C.amber + 'cc', 1)
+    const pbEmaTop = mkLine(C.red + 'cc', 1)
+    const pbEmaBot = mkLine(C.green + 'cc', 1)
     chartR.pbEma.top = { current: pbEmaTop }
     chartR.pbEma.bot = { current: pbEmaBot }
 
