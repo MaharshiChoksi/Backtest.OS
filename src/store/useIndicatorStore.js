@@ -30,6 +30,16 @@ export const useIndicatorStore = create((set) => ({
   slope: {
     enabled: false,
     atrPeriod: 20,
+    lookback: 10,
+    entrySignalPlot: true,
+    pbEmaFilter: true,
+    showSlope1: true,
+    showSlope2: true,
+    showSlope3: true,
+    pbEmaLength: 200,
+    pbEmaTopSource: 'high',
+    pbEmaBottomSource: 'close',
+    showPBEMA: true,
   },
 
   /** Toggle indicator on/off */
@@ -68,6 +78,19 @@ export const useIndicatorStore = create((set) => ({
     bb: { enabled: false, period: 20, stdDev: 2 },
     rsi: { enabled: false, period: 14 },
     pdwl: { enabled: false, showPDOpen: true, showPDHigh: true, showPDLow: true, showPDClose: true, showPWOpen: true, showPWHigh: true, showPWLow: true, showPWClose: true },
-    slope: { enabled: false, atrPeriod: 20 },
+    slope: {
+      enabled: false,
+      atrPeriod: 20,
+      lookback: 10,
+      entrySignalPlot: true,
+      pbEmaFilter: true,
+      showSlope1: true,
+      showSlope2: true,
+      showSlope3: true,
+      pbEmaLength: 200,
+      pbEmaTopSource: 'high',
+      pbEmaBottomSource: 'close',
+      showPBEMA: true,
+    },
   }),
 }))

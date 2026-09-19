@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import {
   createChart,
+  createSeriesMarkers,
   CrosshairMode,
   CandlestickSeries,
   LineSeries,
@@ -97,6 +98,7 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       wickDownColor: C.red + '99',
       priceFormat: { type: 'price', precision: decimals, minMove },
     })
+    const candleMarkers = createSeriesMarkers(candle, [])
 
     const vol = chart.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
@@ -134,6 +136,13 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       bUp  = mkLine(C.blue + '55')
       bLow = mkLine(C.blue + '55')
     }
+
+    // ── PB EMA band ───────────────────────────────────────────────────────────
+    chartR.pbEma = {}
+    const pbEmaTop = mkLine(C.amber + 'cc', 1)
+    const pbEmaBot = mkLine(C.amber + 'cc', 1)
+    chartR.pbEma.top = { current: pbEmaTop }
+    chartR.pbEma.bot = { current: pbEmaBot }
 
     // ── PDWL lines ──────────────────────────────────────────────────────────────
     chartR.pdwl = {}
@@ -189,6 +198,11 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
       bUp?.setData(buildLine(bbData.upper,  cursor, times))
       bLow?.setData(buildLine(bbData.lower, cursor, times))
     }
+    if (indic.slope.enabled) {
+      const signalData = (pdwlData && pdwlData.slopeSignals) || null
+      if (signalData?.pbTop) pbEmaTop.setData(buildLine(signalData.pbTop, cursor, times))
+      if (signalData?.pbBot) pbEmaBot.setData(buildLine(signalData.pbBot, cursor, times))
+    }
 
     // Seed PDWL lines from prev day/week start to current bar
     const seedIdx = cursor - 1
@@ -233,6 +247,7 @@ export function ChartPane({ chartR, bars, times, emaValues, emaPeriods, bbData, 
     // ── Populate refs for sim engine ────────────────────────────────────────────
     chartR.chart.current  = chart
     chartR.candle.current = candle
+    chartR.markerApi      = candleMarkers
     chartR.vol.current    = vol
     chartR.bbMid.current  = bMid
     chartR.bbUp.current   = bUp

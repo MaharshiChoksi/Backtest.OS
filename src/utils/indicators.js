@@ -1,4 +1,4 @@
-import { seriesTimeSeconds, aggregateBars } from './tradingUtils'
+import { seriesTimeSeconds, aggregateBars } from './tradingUtils.js'
 
 export function calcEMA(vals, period) {
   const k   = 2 / (period + 1)
@@ -90,27 +90,110 @@ export function calcATR(bars, period = 20) {
 }
 
 /**
- * Normalized slope for multiple EMAs.
- * Returns an object keyed by EMA period, with slope = (EMA[i] - EMA[i-1]) / ATR[i]
+ * PB EMA / EMA band filter used as a trend gate for entry logic.
+ * pbEmaTop is the EMA of highs, pbEmaBot is the EMA of closes.
  */
-export function calcNormalizedSlope(bars, emaPeriods, atrPeriod = 20) {
-  const closes = bars.map(b => b.close)
+export function calcPBEMA(bars, length = 200, topSource = 'high', bottomSource = 'close') {
+  const topVals = bars.map((b) => b[topSource] ?? b.close)
+  const botVals = bars.map((b) => b[bottomSource] ?? b.close)
+  return {
+    top: calcEMA(topVals, length),
+    bot: calcEMA(botVals, length),
+  }
+}
+
+/**
+ * Normalized slope for multiple EMAs.
+ * Pine-like formula: (EMA[i] - EMA[i - lookback]) / (ATR[i] * lookback)
+ */
+export function calcNormalizedSlope(bars, emaPeriods, atrPeriod = 20, lookback = 10) {
+  const closes = bars.map((b) => b.close)
   const emas = {}
-  emaPeriods.forEach(p => { emas[p] = calcEMA(closes, p) })
+  emaPeriods.forEach((p) => { emas[p] = calcEMA(closes, p) })
   const atr = calcATR(bars, atrPeriod)
   const n = bars.length
   const result = {}
-  emaPeriods.forEach(p => {
+  emaPeriods.forEach((p) => {
     const values = new Array(n).fill(null)
     const ema = emas[p]
-    for (let i = 1; i < n; i++) {
-      if (ema[i] !== null && ema[i - 1] !== null && atr[i] !== null && atr[i] !== 0) {
-        values[i] = +((ema[i] - ema[i - 1]) / atr[i]).toFixed(8)
+    for (let i = lookback; i < n; i++) {
+      if (ema[i] !== null && ema[i - lookback] !== null && atr[i] !== null && atr[i] !== 0) {
+        values[i] = +(((ema[i] - ema[i - lookback]) / (atr[i] * lookback))).toFixed(8)
       }
     }
     result[p] = values
   })
   return result
+}
+
+/**
+ * Build slope-based entry signals using Pine-style crossover logic.
+ * Returns { long, short, pbTop, pbBot, baseLong, baseShort } arrays.
+ */
+export function calcSlopeEntrySignals(bars, emaPeriods, atrPeriod = 20, lookback = 10, options = {}) {
+  const n = bars.length
+  const closes = bars.map((b) => b.close)
+  const highs = bars.map((b) => b.high)
+  const sortedPeriods = Array.from(new Set((emaPeriods || []).filter((p) => Number.isFinite(p) && p > 0)))
+  const p1 = sortedPeriods[0] ?? 20
+  const p2 = sortedPeriods[1] ?? Math.max(5, p1)
+
+  const emaMap = {}
+  sortedPeriods.forEach((p) => { emaMap[p] = calcEMA(closes, p) })
+  const slopeMap = calcNormalizedSlope(bars, sortedPeriods, atrPeriod, lookback)
+  const pbCfg = options || {}
+  const pbLength = Math.max(1, Number(pbCfg.pbEmaLength ?? 200))
+  const pbTopSource = pbCfg.pbEmaTopSource ?? 'high'
+  const pbBottomSource = pbCfg.pbEmaBottomSource ?? 'close'
+  const pb = calcPBEMA(bars, pbLength, pbTopSource, pbBottomSource)
+
+  const baseLong = new Array(n).fill(false)
+  const baseShort = new Array(n).fill(false)
+  const long = new Array(n).fill(false)
+  const short = new Array(n).fill(false)
+
+  const slope1 = slopeMap[p1] || new Array(n).fill(null)
+  const slope2 = slopeMap[p2] || new Array(n).fill(null)
+  const ema1 = emaMap[p1] || new Array(n).fill(null)
+
+  for (let i = 1; i < n; i++) {
+    const prevS1 = slope1[i - 1]
+    const prevS2 = slope2[i - 1]
+    const currS1 = slope1[i]
+    const currS2 = slope2[i]
+    const close = closes[i]
+    const top = pb.top[i]
+    const bot = pb.bot[i]
+
+    const crossoverLong = prevS1 != null && prevS2 != null && currS1 != null && currS2 != null && prevS1 <= prevS2 && currS1 > currS2
+    const crossoverShort = prevS1 != null && prevS2 != null && currS1 != null && currS2 != null && prevS1 >= prevS2 && currS1 < currS2
+
+    const isAboveEma = ema1[i] != null && close > ema1[i]
+    const isBelowEma = ema1[i] != null && close < ema1[i]
+
+    const pbAbove = top != null && close > top
+    const pbBelow = bot != null && close < bot
+
+    baseLong[i] = crossoverLong && isAboveEma
+    baseShort[i] = crossoverShort && isBelowEma
+
+    if (pbCfg.pbEmaFilter === false) {
+      long[i] = baseLong[i]
+      short[i] = baseShort[i]
+    } else {
+      long[i] = baseLong[i] && pbAbove
+      short[i] = baseShort[i] && pbBelow
+    }
+  }
+
+  return {
+    long,
+    short,
+    pbTop: pb.top,
+    pbBot: pb.bot,
+    baseLong,
+    baseShort,
+  }
 }
 
 /**
