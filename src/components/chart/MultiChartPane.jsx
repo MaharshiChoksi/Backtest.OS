@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useSimStore } from '../../store/useSimStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
-import { calcRSI, calcBB, calcEMAs, calcPDWL, calcNormalizedSlope } from '../../utils/indicators'
+import { calcRSI, calcBB, calcEMAs, calcPDWL, calcNormalizedSlope, calcSlopeEntrySignals } from '../../utils/indicators'
 import { ChartPane } from './ChartPane'
 import { RsiPane } from './RsiPane'
 import { SlopePane } from './SlopePane'
@@ -18,6 +18,7 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, slopeRefsMap, showRsi, s
   const indic              = useIndicatorStore()
   const emaPeriods         = indic.ema.enabled ? indic.ema.periods : []
   const slopeAtrPeriod     = indic.slope.atrPeriod || 20
+  const slopeLookback      = indic.slope.lookback || 10
 
   const indicByTF = useMemo(() => {
     const result = {}
@@ -32,11 +33,17 @@ export function MultiChartPane({ chartRefs, rsiRefsMap, slopeRefsMap, showRsi, s
         bb:        calcBB(closes, indic.bb.period, indic.bb.stdDev),
         rsi:       calcRSI(closes, indic.rsi.period),
         pdwl:      calcPDWL(bars),
-        slope:     calcNormalizedSlope(bars, indic.ema.periods, slopeAtrPeriod),
+        slope:     calcNormalizedSlope(bars, indic.ema.periods, slopeAtrPeriod, slopeLookback),
+        slopeSignals: calcSlopeEntrySignals(bars, indic.ema.periods, slopeAtrPeriod, slopeLookback, {
+          pbEmaFilter: indic.slope.pbEmaFilter,
+          pbEmaLength: indic.slope.pbEmaLength,
+          pbEmaTopSource: indic.slope.pbEmaTopSource,
+          pbEmaBottomSource: indic.slope.pbEmaBottomSource,
+        }),
       }
     })
     return result
-  }, [selectedTimeframes, barsMap, emaPeriods, indic.bb, indic.rsi, slopeAtrPeriod, indic.ema.periods])
+  }, [selectedTimeframes, barsMap, emaPeriods, indic.bb, indic.rsi, slopeAtrPeriod, slopeLookback, indic.ema.periods, indic.slope])
 
   // chartId = the timeframe string — required for per-chart DrawingManager isolation
   const renderChart = (tf) => (

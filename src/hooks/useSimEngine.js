@@ -224,6 +224,31 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
       }
     }
 
+    // PB EMA band + entry markers
+    const slopeSignals = data.slopeSignals
+    if (ic.slope.enabled && refs?.pbEma && slopeSignals && slopeSignals.pbTop && slopeSignals.pbBot) {
+      refs.pbEma.top.current?.setData(buildLine(slopeSignals.pbTop, idx + 1, data.times ?? times))
+      refs.pbEma.bot.current?.setData(buildLine(slopeSignals.pbBot, idx + 1, data.times ?? times))
+    } else if (refs?.pbEma) {
+      refs.pbEma.top.current?.setData([])
+      refs.pbEma.bot.current?.setData([])
+    }
+    if (ic.slope.entrySignalPlot && refs?.markerApi && slopeSignals) {
+      const markers = []
+      for (let i = 0; i <= idx; i++) {
+        const time = data.times?.[i] ? seriesTimeSeconds(data.times[i]) : chartUnixSeconds(barData.time)
+        if (slopeSignals.long[i]) {
+          markers.push({ time, position: 'belowBar', color: '#22c55e', shape: 'arrowUp', text: 'LONG', size: 1 })
+        }
+        if (slopeSignals.short[i]) {
+          markers.push({ time, position: 'aboveBar', color: '#ef4444', shape: 'arrowDown', text: 'SHORT', size: 1 })
+        }
+      }
+      refs.markerApi.setMarkers(markers)
+    } else if (refs?.markerApi) {
+      refs.markerApi.setMarkers([])
+    }
+
     // PDWL levels — draw from prev day/week start to current bar
     const pd = data.pdwl
     if (ic.pdwl.enabled && pd && refs.pdwl) {
@@ -513,6 +538,26 @@ export function useSimEngine({ bars, times, emaValues, emaPeriods, bbData, rsiVa
       const pRsi = primaryData.rsi ?? rsiVals
       applyRsiPaneSlice(primaryRsiRefs, pRsi, primaryTimes, primaryBarsSeek, target, ic.rsi.enabled)
       applySlopePaneSlice(primarySlopeRefs, primaryData.slope, primaryTimes, target, ic.slope.enabled)
+
+      const slopeSignals = primaryData.slopeSignals
+      if (ic.slope.enabled && primaryRefs?.pbEma && slopeSignals) {
+        primaryRefs.pbEma.top.current?.setData(buildLine(slopeSignals.pbTop, target, primaryTimes))
+        primaryRefs.pbEma.bot.current?.setData(buildLine(slopeSignals.pbBot, target, primaryTimes))
+      } else if (primaryRefs?.pbEma) {
+        primaryRefs.pbEma.top.current?.setData([])
+        primaryRefs.pbEma.bot.current?.setData([])
+      }
+      if (ic.slope.entrySignalPlot && primaryRefs?.markerApi && slopeSignals) {
+        const markers = []
+        for (let i = 0; i < target; i++) {
+          const time = primaryTimes[i] ? seriesTimeSeconds(primaryTimes[i]) : 0
+          if (slopeSignals.long[i]) markers.push({ time, position: 'belowBar', color: '#22c55e', shape: 'arrowUp', text: 'LONG', size: 1 })
+          if (slopeSignals.short[i]) markers.push({ time, position: 'aboveBar', color: '#ef4444', shape: 'arrowDown', text: 'SHORT', size: 1 })
+        }
+        primaryRefs.markerApi.setMarkers(markers.filter((m) => m.time !== 0))
+      } else if (primaryRefs?.markerApi) {
+        primaryRefs.markerApi.setMarkers([])
+      }
 
       // Sync indicator chart time scales to main chart after data is set
       if (primaryRefs?.chart?.current) {

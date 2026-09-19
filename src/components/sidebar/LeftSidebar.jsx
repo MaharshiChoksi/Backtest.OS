@@ -455,6 +455,15 @@ function IndicTab({ emaValues, bbData, rsiVals, indic, slopeData, slopeConfig })
         <span style={{ fontSize: 12, color: indic.slope.enabled ? C.text : C.muted, fontFamily: FONT }}>Normalized Slope ({indic.ema.periods.join(', ')})</span>
       </div>
 
+      {indic.slope.enabled && (
+        <div style={{ paddingLeft: 24, paddingTop: 4, paddingBottom: 8, borderBottom: `1px solid ${C.border}22` }}>
+          <LevelToggle label="Entry markers" active={indic.slope.entrySignalPlot} color={C.green} onClick={() => indic.setSlopeConfig({ entrySignalPlot: !indic.slope.entrySignalPlot })} />
+          <LevelToggle label="PB EMA filter" active={indic.slope.pbEmaFilter} color={C.amber} onClick={() => indic.setSlopeConfig({ pbEmaFilter: !indic.slope.pbEmaFilter })} />
+          <LevelToggle label="Show PB EMA" active={indic.slope.showPBEMA} color={C.purple} onClick={() => indic.setSlopeConfig({ showPBEMA: !indic.slope.showPBEMA })} />
+          <div style={{ fontSize: 10, color: C.muted, paddingTop: 4 }}>ATR {indic.slope.atrPeriod} · Lookback {indic.slope.lookback}</div>
+        </div>
+      )}
+
       <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
       <SectionHeader>Sub-Pane</SectionHeader>
 

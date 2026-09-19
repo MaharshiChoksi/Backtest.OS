@@ -121,6 +121,9 @@ export function UploadScreen({ onOpenJournal }) {
   const [bbStdDev, setBbStdDev] = useState(2)
   const [rsiEnabled, setRsiEnabled] = useState(false)
   const [rsiPeriod, setRsiPeriod] = useState(14)
+  const [slopeEnabled, setSlopeEnabled] = useState(false)
+  const [slopeAtrPeriod, setSlopeAtrPeriod] = useState(20)
+  const [slopeLookback, setSlopeLookback] = useState(10)
 
   // Timeframe options (must match getTimeframeMs format): lowercase like '1m', '5m', etc
   const TIMEFRAME_OPTIONS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
@@ -457,7 +460,7 @@ export function UploadScreen({ onOpenJournal }) {
 
   const handleContinueToAccount = () => {
     // Parse and save indicator config to store
-    const { setEmaConfig, setBbConfig, setRsiConfig } = useIndStore.getState()
+    const { setEmaConfig, setBbConfig, setRsiConfig, setSlopeConfig } = useIndStore.getState()
     
     // Parse EMA periods from input
     const periodVals = emaPeriodsInput.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0)
@@ -474,6 +477,14 @@ export function UploadScreen({ onOpenJournal }) {
     setEmaConfig(periodVals.length > 0 ? periodVals : emaPeriods, colorVals.length > 0 ? colorVals : emaColors)
     setBbConfig(bbPeriod, bbStdDev)
     setRsiConfig(rsiPeriod)
+    setSlopeConfig({
+      enabled: slopeEnabled,
+      atrPeriod: Number(slopeAtrPeriod) || 20,
+      lookback: Number(slopeLookback) || 10,
+      entrySignalPlot: true,
+      pbEmaFilter: true,
+      showPBEMA: true,
+    })
     setStep(STEPS.ACCOUNT)
   }
 
@@ -1360,6 +1371,67 @@ export function UploadScreen({ onOpenJournal }) {
                       onChange={(e) => setBbStdDev(parseFloat(e.target.value) || 2)}
                       style={{ ...inp }}
                     />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Slope / ATR Configuration */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <div
+                  onClick={() => setSlopeEnabled(!slopeEnabled)}
+                  style={{
+                    width: 44,
+                    height: 24,
+                    borderRadius: 12,
+                    background: slopeEnabled ? C.green : C.surf2,
+                    border: `1px solid ${slopeEnabled ? C.green : C.border2}`,
+                    cursor: 'pointer',
+                    position: 'relative',
+                    transition: 'all .2s',
+                  }}
+                >
+                  <div style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    background: '#fff',
+                    position: 'absolute',
+                    top: 2,
+                    left: slopeEnabled ? 22 : 2,
+                    transition: 'left .2s',
+                  }} />
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Normalized Slope</div>
+              </div>
+
+              {slopeEnabled && (
+                <div style={{ paddingLeft: 56 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <label style={lbl}>ATR Period</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={slopeAtrPeriod}
+                        onChange={(e) => setSlopeAtrPeriod(parseInt(e.target.value) || 20)}
+                        style={{ ...inp }}
+                      />
+                    </div>
+                    <div>
+                      <label style={lbl}>Slope Lookback</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={slopeLookback}
+                        onChange={(e) => setSlopeLookback(parseInt(e.target.value) || 10)}
+                        style={{ ...inp }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 8 }}>
+                    Formula: (EMA(t) - EMA(t - lookback)) / (ATR * lookback)
                   </div>
                 </div>
               )}

@@ -3,7 +3,7 @@ import { useTheme } from '../../store/useThemeStore'
 import { useSimStore } from '../../store/useSimStore'
 import { useTradeStore } from '../../store/useTradeStore'
 import { useIndicatorStore } from '../../store/useIndicatorStore'
-import { calcEMA, calcRSI, calcBB, calcPDWL, calcNormalizedSlope } from '../../utils/indicators'
+import { calcEMA, calcRSI, calcBB, calcPDWL, calcNormalizedSlope, calcSlopeEntrySignals } from '../../utils/indicators'
 import { useSimEngine } from '../../hooks/useSimEngine'
 import { Header } from './Header'
 import { SimBar } from './SimBar'
@@ -129,7 +129,13 @@ export function Workspace({ onLoadNew }) {
           bb: calcBB(closes, bbPeriod, bbStdDev),
           rsi: calcRSI(closes, rsiPeriod),
           pdwl: calcPDWL(barData),
-          slope: calcNormalizedSlope(barData, emaPeriods, slopeConfig.atrPeriod),
+          slope: calcNormalizedSlope(barData, emaPeriods, slopeConfig.atrPeriod, slopeConfig.lookback || 10),
+          slopeSignals: calcSlopeEntrySignals(barData, emaPeriods, slopeConfig.atrPeriod, slopeConfig.lookback || 10, {
+            pbEmaFilter: slopeConfig.pbEmaFilter,
+            pbEmaLength: slopeConfig.pbEmaLength,
+            pbEmaTopSource: slopeConfig.pbEmaTopSource,
+            pbEmaBottomSource: slopeConfig.pbEmaBottomSource,
+          }),
         }
       }
     }
@@ -150,7 +156,13 @@ export function Workspace({ onLoadNew }) {
         bb: calcBB(closes, bbPeriod, bbStdDev),
         rsi: calcRSI(closes, rsiPeriod),
         pdwl: calcPDWL(tfBars),
-        slope: calcNormalizedSlope(tfBars, emaPeriods, slopeConfig.atrPeriod),
+        slope: calcNormalizedSlope(tfBars, emaPeriods, slopeConfig.atrPeriod, slopeConfig.lookback || 10),
+        slopeSignals: calcSlopeEntrySignals(tfBars, emaPeriods, slopeConfig.atrPeriod, slopeConfig.lookback || 10, {
+          pbEmaFilter: slopeConfig.pbEmaFilter,
+          pbEmaLength: slopeConfig.pbEmaLength,
+          pbEmaTopSource: slopeConfig.pbEmaTopSource,
+          pbEmaBottomSource: slopeConfig.pbEmaBottomSource,
+        }),
       }
     })
     return result
