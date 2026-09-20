@@ -224,24 +224,42 @@ export async function parseParquet(arrayBuffer) {
 // INDEXEDDB CACHE
 // ═══════════════════════════════════════════════════════════════════
 
+const CACHE_DB_NAME = 'BacktestDB'
+const CACHE_DB_VERSION = 4
+
+function openCacheDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(CACHE_DB_NAME, CACHE_DB_VERSION)
+
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result
+      if (!db.objectStoreNames.contains('metadata')) {
+        db.createObjectStore('metadata', { keyPath: 'name' })
+      }
+      if (!db.objectStoreNames.contains('bars')) {
+        db.createObjectStore('bars', { keyPath: 'name' })
+      }
+    }
+
+    req.onsuccess = () => {
+      const db = req.result
+      if (!db.objectStoreNames.contains('metadata') || !db.objectStoreNames.contains('bars')) {
+        db.close()
+        reject(new Error('IndexedDB cache schema is incomplete. Please reload the page.'))
+        return
+      }
+      db.onversionchange = () => db.close()
+      resolve(db)
+    }
+    req.onerror = () => reject(req.error)
+  })
+}
+
 export async function cacheData(fileName, headers, rows, bars, options = {}) {
   const { useBinary = true, onProgress } = options
 
   try {
-    const db = await new Promise((resolve, reject) => {
-      const req = indexedDB.open('BacktestDB', 3)
-      req.onupgradeneeded = (e) => {
-        const db = e.target.result
-        if (!db.objectStoreNames.contains('metadata')) {
-          db.createObjectStore('metadata', { keyPath: 'name' })
-        }
-        if (!db.objectStoreNames.contains('bars')) {
-          db.createObjectStore('bars', { keyPath: 'name' })
-        }
-      }
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-    })
+    const db = await openCacheDb()
 
     const timestamp = Date.now()
 
@@ -323,20 +341,7 @@ export async function cacheData(fileName, headers, rows, bars, options = {}) {
 
 export async function loadCachedData(fileName) {
   try {
-    const db = await new Promise((resolve, reject) => {
-      const req = indexedDB.open('BacktestDB', 2)
-      req.onupgradeneeded = (e) => {
-        const db = e.target.result
-        if (!db.objectStoreNames.contains('metadata')) {
-          db.createObjectStore('metadata', { keyPath: 'name' })
-        }
-        if (!db.objectStoreNames.contains('bars')) {
-          db.createObjectStore('bars', { keyPath: 'name' })
-        }
-      }
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-    })
+    const db = await openCacheDb()
 
     const tx = db.transaction(['metadata', 'bars'], 'readonly')
 
@@ -383,11 +388,7 @@ export async function loadCachedData(fileName) {
 
 export async function clearCache(fileName = null) {
   try {
-    const db = await new Promise((resolve, reject) => {
-      const req = indexedDB.open('BacktestDB', 3)
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-    })
+    const db = await openCacheDb()
 
     const tx = db.transaction(['metadata', 'bars'], 'readwrite')
 
